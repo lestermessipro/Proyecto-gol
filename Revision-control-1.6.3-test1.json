@@ -1,0 +1,64 @@
+{
+  "version": "1.6.3-test1",
+  "method": "EntitySoccer server physics, grass floor, one manual request, original heading without random spread for comparison",
+  "game_or_network_session_tested": false,
+  "scenarios": [
+    {
+      "scenario": "toque_en_parado",
+      "charge": 6.0,
+      "player_blocks_per_tick": 0.0,
+      "incoming_blocks_per_tick": 0.0,
+      "reception": false,
+      "old_initial_speed": 0.15,
+      "test_initial_speed": 0.15,
+      "old_distance_10_ticks": 1.2568776649757,
+      "test_distance_10_ticks": 1.2568776150318708,
+      "old_max_height": 0.45426926967625036,
+      "test_max_height": 0.0,
+      "test_speed_120_ticks": 0.0
+    },
+    {
+      "scenario": "conduccion_carrera",
+      "charge": 12.0,
+      "player_blocks_per_tick": 0.2,
+      "incoming_blocks_per_tick": 0.2,
+      "reception": false,
+      "old_initial_speed": 0.3,
+      "test_initial_speed": 0.36666666348775223,
+      "old_distance_10_ticks": 2.5137553299513993,
+      "test_distance_10_ticks": 3.072367476774531,
+      "old_max_height": 0.45426926967625036,
+      "test_max_height": 0.0,
+      "test_speed_120_ticks": 0.0
+    },
+    {
+      "scenario": "conduccion_sprint",
+      "charge": 12.0,
+      "player_blocks_per_tick": 0.3,
+      "incoming_blocks_per_tick": 0.3,
+      "reception": false,
+      "old_initial_speed": 0.3,
+      "test_initial_speed": 0.3999999952316283,
+      "old_distance_10_ticks": 2.5137553299513993,
+      "test_distance_10_ticks": 3.351673600129925,
+      "old_max_height": 0.45426926967625036,
+      "test_max_height": 0.0,
+      "test_speed_120_ticks": 0.0
+    },
+    {
+      "scenario": "recepcion_frontal",
+      "charge": 6.0,
+      "player_blocks_per_tick": 0.0,
+      "incoming_blocks_per_tick": -1.2,
+      "reception": true,
+      "old_initial_speed": 0.15,
+      "test_initial_speed": 0.11500000052154064,
+      "old_distance_10_ticks": 1.2568776649757,
+      "test_distance_10_ticks": 0.9636061758945196,
+      "old_max_height": 0.45426926967625036,
+      "test_max_height": 0.0,
+      "test_speed_120_ticks": 0.0
+    }
+  ],
+  "control_animations_reset_without_model_render": true
+}
