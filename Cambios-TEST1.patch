@@ -1,0 +1,971 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -6,7 +6,7 @@
+     dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+ }
+ apply plugin: 'net.minecraftforge.gradle'
+-version = '1.6.1-smooth-ball'
++version = '1.6.2-test1'
+ group = 'net.sports'
+ archivesBaseName = 'ProyectoGol'
+ sourceCompatibility = targetCompatibility = '1.8'
+--- a/src/main/java/net/sports/Anim.java
++++ b/src/main/java/net/sports/Anim.java
+@@ -31,6 +31,10 @@
+ 
+    private static final Anim[] anims = values();
+ 
++   public static boolean isValid(int id) {
++      return id >= 0 && id < anims.length;
++   }
++
+    public static final Anim get(int var0) {
+       return anims[var0];
+    }
+--- a/src/main/java/net/sports/Sports.java
++++ b/src/main/java/net/sports/Sports.java
+@@ -9,6 +9,10 @@
+ 
+    private static final Sports[] sports = values();
+ 
++   public static boolean isValid(int id) {
++      return id >= 0 && id < sports.length;
++   }
++
+    public static final Sports get(int i) {
+       return sports[i];
+    }
+--- a/src/main/java/net/sports/SportsMod.java
++++ b/src/main/java/net/sports/SportsMod.java
+@@ -33,7 +33,7 @@
+ import net.sports.network.PacketPipeline;
+ import net.sports.settings.Settings;
+ 
+-@Mod(modid = "sports", name = "sports", version = "1.6.1")
++@Mod(modid = "sports", name = "sports", version = "1.6.2-test1")
+ public class SportsMod {
+    @SidedProxy(clientSide = "net.sports.client.client_Sports", serverSide = "net.sports.common_Sports")
+    public static common_Sports proxy;
+--- a/src/main/java/net/sports/client/client_Sports.java
++++ b/src/main/java/net/sports/client/client_Sports.java
+@@ -117,29 +117,32 @@
+ 
+    @Override
+    public void tick(TickEvent var1) {
++      if (var1.phase != TickEvent.Phase.END) return;
+       if (var1.type == Type.RENDER) {
+          this.onRenderTick();
+       } else if (var1.type == Type.CLIENT) {
+-         GuiScreen var2 = Minecraft.getMinecraft().currentScreen;
+-         if (var2 != null) {
+-            this.onTickInGUI(var2);
+-         } else {
+-            this.onTickInGame();
+-         }
+-
+-         EntityPlayerSP var3;
+-         if (sportsman == null && (var3 = Minecraft.getMinecraft().player) != null) {
+-            sportsman = (EntitySportsman)((IClientPlayer)var3).getClientPlayerBase("EntitySportsman");
+-         }
++         this.onClientTick();
+       }
+    }
+ 
++   public void onClientTick() {
++      GuiScreen var2 = Minecraft.getMinecraft().currentScreen;
++      if (var2 != null) {
++         this.onTickInGUI(var2);
++      } else {
++         this.onTickInGame();
++      }
++
++      EntityPlayerSP var3 = Minecraft.getMinecraft().player;
++      sportsman = var3 == null ? null : (EntitySportsman)((IClientPlayer)var3).getClientPlayerBase("EntitySportsman");
++   }
++
+    public void onRenderTick() {
+-      hud.draw();
+       this.timer.updateTimer();
+       if (this.timer.elapsedTicks != 0) {
+          hud.onUpdate();
+       }
++      hud.draw();
+    }
+ 
+    public void onTickInGUI(GuiScreen var1) {
+--- a/src/main/java/net/sports/client/entity/PlayerParameter.java
++++ b/src/main/java/net/sports/client/entity/PlayerParameter.java
+@@ -33,6 +33,10 @@
+    public float rotXActuel;
+    public Anim lastAnim;
+    private static final Map<Entity, PlayerParameter> otherPlayersMP = Collections.synchronizedMap(new WeakHashMap<>());
++
++   public static void clearRemotePlayers() {
++      otherPlayersMP.clear();
++   }
+    public float rotateAngleX;
+    public float rotateAngleY;
+    public float rotateAngleZ;
+--- a/src/main/java/net/sports/client/gui/Hud.java
++++ b/src/main/java/net/sports/client/gui/Hud.java
+@@ -20,6 +20,7 @@
+ import net.sports.SportsMod;
+ import net.sports.SportsSounds;
+ import net.sports.client.SlideEffects;
++import net.sports.client.HudTiming;
+ import net.sports.client.SlideYaw;
+ import net.sports.client.entity.EntitySportsman;
+ import net.sports.client.entity.PlayerParameter;
+@@ -78,6 +79,10 @@
+ 
+    public void onUpdate() {
+       this.playerSP = Minecraft.getMinecraft().player;
++      if (this.playerSP == null) {
++         resetSession();
++         return;
++      }
+       if (this.playerSP != null) {
+          this.sportsman = (EntitySportsman)((IClientPlayer)this.playerSP).getClientPlayerBase("EntitySportsman");
+          this.playerParameter = this.sportsman.playerParameter;
+@@ -110,7 +115,9 @@
+ 
+          this.prevTick = this.playerSP.ticksExisted;
+          this.chargeTimer.updateTimer();
+-         int var5 = this.chargeTimer.elapsedTicks;
++         int var5 = Math.max(0, this.chargeTimer.elapsedTicks);
++         this.goldFlash = Math.max(0, this.goldFlash - var5);
++         this.msgTicks = Math.max(0, this.msgTicks - var5);
+          if (!var4 && (!KeyBindings.key_Cross.isKeyDown() || !this.playerSP.movementInput.sneak) && KeyBindings.key_Cross.isKeyDown()) {
+             Cross = Cross + 1.6F * (0.5F + Settings.cross) * var5;
+          }
+@@ -122,7 +129,7 @@
+                if (this.fullTicks < 0) {
+                   this.fullTicks = 0;
+                } else {
+-                  this.fullTicks++;
++                  this.fullTicks = Math.min(9, this.fullTicks + Math.min(9, var5));
+                }
+             }
+          }
+@@ -169,10 +176,6 @@
+             && Circle == 0.0F
+             && (this.sportsman.getAnim() == Anim.ARMER_TIR || this.sportsman.getAnim() == Anim.ARMER_CURVE_TIR)) {
+             this.sportsman.setAnim(Anim.RESET);
+-         }
+-
+-         if (this.goldFlash > 0) {
+-            this.goldFlash--;
+          }
+ 
+          boolean var6 = KeyBindings.key_Curve.isKeyDown();
+@@ -263,26 +266,7 @@
+             }
+          }
+ 
+-         if (this.msgTicks > 0) {
+-            this.msgTicks--;
+-         }
+-
+-         this.inc++;
+-         String var14 = "";
+-         if (this.pow < Circle) {
+-            this.pow = Circle;
+-         }
+-
+-         if (this.pow < Cross) {
+-            this.pow = Cross;
+-         }
+-
+-         if (this.inc < 30) {
+-            new StringBuilder().append("Pow : ").append(this.pow).toString();
+-         } else {
+-            this.inc = 0;
+-            this.pow = 0.0F;
+-         }
++         updatePowerDisplay(var5);
+ 
+          if (this.playerParameter != null) {
+             boolean var16 = this.playerSP.movementInput.jump;
+@@ -294,13 +278,7 @@
+             }
+ 
+             this.wasOnGround = this.playerSP.onGround;
+-            if (this.playerParameter.run) {
+-               if (this.playerParameter.endurance > 3) {
+-                  this.playerParameter.endurance -= 3;
+-               }
+-            } else {
+-               this.playerParameter.endurance++;
+-            }
++            this.playerParameter.endurance = HudTiming.endurance(this.playerParameter.endurance, this.playerParameter.run, var5);
+ 
+             this.playerParameter.maxSpeed = 0.2F + 0.1F * this.playerParameter.endurance / 6000.0F;
+             if (this.playerParameter.endurance > 6000) {
+@@ -310,7 +288,30 @@
+       }
+    }
+ 
++   private void updatePowerDisplay(int elapsedTicks) {
++      if (Circle > 0 || Cross > 0) {
++         this.pow = Math.max(Circle, Cross);
++         this.inc = 0;
++      } else {
++         this.inc = Math.min(30, this.inc + Math.min(30, elapsedTicks));
++         if (this.inc >= 30) this.pow = 0;
++      }
++   }
++
++   public void resetSession() {
++      this.playerSP = null;this.sportsman = null;this.playerParameter = null;
++      Cross = Circle = this.pow = 0;curveToggle = false;
++      this.fullTicks = -1;this.goldFlash = this.inc = this.time = 0;
++      this.slideTicks = this.lastSlideTick = this.slideCdEnd = this.shotCdEnd = this.diveCdEnd = this.prevTick = 0;
++      this.curveWasDown = this.slideHit = this.slideWasDown = this.wasLying = this.diveWasDown = this.wasDiving = false;
++      this.wasOnGround = true;this.msgTicks = 0;this.msgText = "";
++   }
++
+    public void draw() {
++      if (this.mc.player == null || this.mc.world == null) {
++         resetSession();
++         return;
++      }
+       if (this.mc.currentScreen == null && !this.mc.gameSettings.hideGUI) {
+          this.var3 = new ScaledResolution(this.mc);
+          this.gui = Minecraft.getMinecraft().ingameGUI;
+--- a/src/main/java/net/sports/client/render/RenderBall.java
++++ b/src/main/java/net/sports/client/render/RenderBall.java
+@@ -33,6 +33,7 @@
+    private final float[] truncatedHex = new float[]{0.98F, 0.98F, 0.98F};
+    private final float[] truncatedPent = new float[]{0.02F, 0.02F, 0.02F};
+    private static final HashMap<Integer, Integer> sphereLists = new HashMap<>();
++   private int truncatedList;
+    private static final FloatBuffer LIGHT_POSITION = lightBuffer(-0.35F, 0.75F, 0.55F, 0.0F);
+    private static final FloatBuffer LIGHT_DIFFUSE = lightBuffer(0.78F, 0.78F, 0.78F, 1.0F);
+    private static final FloatBuffer LIGHT_AMBIENT = lightBuffer(0.42F, 0.42F, 0.42F, 1.0F);
+@@ -224,23 +225,42 @@
+    }
+ 
+    private void drawTruncated() {
++      if (this.truncatedList == 0) {
++         this.truncatedList = GL11.glGenLists(1);
++         if (this.truncatedList == 0) {
++            this.emitTruncated();
++            return;
++         }
++         GL11.glNewList(this.truncatedList, GL11.GL_COMPILE);
++         this.emitTruncated();
++         GL11.glEndList();
++      }
++      GL11.glCallList(this.truncatedList);
++   }
++
++   private void emitTruncated() {
++      // One triangle batch preserves each face's color and normal while avoiding
++      // a separate GPU submission for every pentagon and hexagon.
++      GL11.glBegin(GL11.GL_TRIANGLES);
+       for (int var1 = 0; var1 < ModelTruncatedIcosahedron.FACES.length; var1++) {
+          float[] var2 = ModelTruncatedIcosahedron.PENTAGON[var1] ? this.truncatedPent : this.truncatedHex;
+          int[] var3 = ModelTruncatedIcosahedron.FACES[var1];
+          float[] var4 = ModelTruncatedIcosahedron.NORMALS[var1];
+          GL11.glColor3f(var2[0], var2[1], var2[2]);
+-         GL11.glBegin(6);
+          GL11.glNormal3f(var4[0], var4[1], var4[2]);
+ 
+-         for (int var5 = 0; var5 < var3.length; var5++) {
+-            int var6 = var3[var5];
+-            GL11.glVertex3f(
+-               ModelTruncatedIcosahedron.VERTICES[var6 * 3], ModelTruncatedIcosahedron.VERTICES[var6 * 3 + 1], ModelTruncatedIcosahedron.VERTICES[var6 * 3 + 2]
+-            );
+-         }
+-
+-         GL11.glEnd();
+-      }
++         for (int var5 = 1; var5 < var3.length - 1; var5++) {
++            truncatedVertex(var3[0]);
++            truncatedVertex(var3[var5]);
++            truncatedVertex(var3[var5 + 1]);
++         }
++      }
++      GL11.glEnd();
++   }
++
++   private static void truncatedVertex(int index) {
++      GL11.glVertex3f(ModelTruncatedIcosahedron.VERTICES[index * 3],
++         ModelTruncatedIcosahedron.VERTICES[index * 3 + 1], ModelTruncatedIcosahedron.VERTICES[index * 3 + 2]);
+    }
+ 
+    private static FloatBuffer lightBuffer(float... var0) {
+--- a/src/main/java/net/sports/client/settings/Settings.java
++++ b/src/main/java/net/sports/client/settings/Settings.java
+@@ -45,6 +45,7 @@
+ 
+       try {
+          File var2 = new File("./mods/");
++         var2.mkdirs();
+          optionsFile = new File(var2, "mod_Sports.properties");
+          if (!optionsFile.exists()) {
+             PrintWriter var3 = new PrintWriter(new FileWriter(optionsFile));
+@@ -77,6 +78,8 @@
+       circle = 0.5F;
+       hud = 0;
+       sprintToggle = false;
++      rangeCircle = false;
++      marks = false;
+       shotCooldown = true;
+       ballIndicator = false;
+    }
+@@ -109,6 +112,7 @@
+    }
+ 
+    public void setOptionFloatValue(Options var1, float var2) {
++      var2 = unitValue(var2);
+       if (var1 == Options.BALL) {
+          ball = var2;
+       }
+@@ -135,10 +139,7 @@
+       }
+ 
+       if (var1 == Options.HUD) {
+-         hud += var2;
+-         if (hud > 3) {
+-            hud = 0;
+-         }
++         hud = Math.floorMod(hud + var2, HUD.length);
+       }
+ 
+       if (var1 == Options.SPRINT) {
+@@ -185,7 +186,7 @@
+          }
+ 
+          if (var1 == Options.PRECISION) {
+-            return var2 + PRECISION[precision];
++            return var2 + PRECISION[boundedIndex(precision, PRECISION.length)];
+          } else if (var1 == Options.SPRINT) {
+             return var2 + (sprintToggle ? "Alternar" : "Mantener");
+          } else if (var1 == Options.RANGE) {
+@@ -197,7 +198,7 @@
+          } else if (var1 == Options.BALL_INDICATOR) {
+             return var2 + (ballIndicator ? "Activado" : "Desactivado");
+          } else {
+-            return var1 == Options.HUD ? var2 + HUD[hud] : var2;
++            return var1 == Options.HUD ? var2 + HUD[boundedIndex(hud, HUD.length)] : var2;
+          }
+       }
+    }
+@@ -222,9 +223,11 @@
+ 
+          while ((var2 = var1.readLine()) != null) {
+             try {
+-               String[] var3 = var2.split(":");
++               String[] var3 = var2.split(":", 2);
++               if (var3.length != 2) continue;
++               var3[0] = var3[0].trim();var3[1] = var3[1].trim();
+                if (var3[0].equals("BallsRenderDistance")) {
+-                  ball = this.parseFloat(var3[1]);
++                  ball = unitValue(this.parseFloat(var3[1]));
+                }
+ 
+                if (var3[0].equals("BallsRenderPrecision")) {
+@@ -235,34 +238,34 @@
+                }
+ 
+                if (var3[0].equals("Hud")) {
+-                  hud = Integer.parseInt(var3[1]);
++                  hud = boundedIndex(Integer.parseInt(var3[1]), HUD.length);
+                }
+ 
+                if (var3[0].equals("KeyCrossSensitivity")) {
+-                  cross = this.parseFloat(var3[1]);
++                  cross = unitValue(this.parseFloat(var3[1]));
+                }
+ 
+                if (var3[0].equals("KeyCircleSensitivity")) {
+-                  circle = this.parseFloat(var3[1]);
++                  circle = unitValue(this.parseFloat(var3[1]));
+                }
+ 
+                if (var3[0].equals("SprintToggle")) {
+-                  sprintToggle = this.parseFloat(var3[1]) != 0.0F;
++                  sprintToggle = readFlag(var3[1], false);
+                }
+ 
+                if (var3[0].equals("RangeCircle")) {
+-                  rangeCircle = this.parseFloat(var3[1]) != 0.0F;
++                  rangeCircle = readFlag(var3[1], false);
+                }
+ 
+                if (var3[0].equals("MateMarks")) {
+-                  marks = this.parseFloat(var3[1]) != 0.0F;
++                  marks = readFlag(var3[1], false);
+                }
+ 
+                if (var3[0].equals("ShotCooldown")) {
+-                  shotCooldown = this.parseFloat(var3[1]) != 0.0F;
++                  shotCooldown = readFlag(var3[1], true);
+                }
+                if (var3[0].equals("BallIndicator")) {
+-                  ballIndicator = this.parseFloat(var3[1]) != 0.0F;
++                  ballIndicator = readFlag(var3[1], false);
+                }
+             } catch (Exception var12) {
+                System.out.println("Skipping bad option: " + var2);
+@@ -323,6 +326,19 @@
+       } else {
+          return var1.equals("false") ? 0.0F : Float.parseFloat(var1);
+       }
++   }
++
++   private static float unitValue(float value) {
++      return Float.isFinite(value) ? Math.max(0, Math.min(1, value)) : .5f;
++   }
++
++   private boolean readFlag(String value, boolean fallback) {
++      float parsed = parseFloat(value);
++      return Float.isFinite(parsed) ? parsed != 0 : fallback;
++   }
++
++   private static int boundedIndex(int value, int length) {
++      return value >= 0 && value < length ? value : 0;
+    }
+ 
+    public void saveOptions() {
+--- a/src/main/java/net/sports/match/client/MatchClient.java
++++ b/src/main/java/net/sports/match/client/MatchClient.java
+@@ -331,6 +331,18 @@
+ 
+    @SubscribeEvent
+    public void onConnected(ClientConnectedToServerEvent var1) {
++      Minecraft.getMinecraft().addScheduledTask(MatchClient::resetSession);
++   }
++
++   @SubscribeEvent
++   public void onDisconnected(net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
++      Minecraft.getMinecraft().addScheduledTask(MatchClient::resetSession);
++   }
++
++   public static void resetSession() {
++      fieldActive = false;fieldDim = Integer.MIN_VALUE;pitchCfg = null;
++      sbVisible = sbPaused = false;sbScoreA = sbScoreB = 0;
++      sbPeriod = sbClock = sbTotal = sbNameA = sbNameB = "";
+       replaySbVisible = false;
+       replaySbA = -1;
+       replaySbB = -1;
+@@ -343,6 +355,7 @@
+       shirtNames.clear();
+       myNumber = 0;
+       myShirtName = "";
++      PlayerParameter.clearRemotePlayers();
+    }
+ 
+    public static void receiveMarks(final String var0) {
+--- a/src/main/java/net/sports/network/PacketEvent.java
++++ b/src/main/java/net/sports/network/PacketEvent.java
+@@ -55,6 +55,7 @@
+ 
+    @Override
+    public void handleClientSide(EntityPlayer var1) {
++      if (var1 == null || !Anim.isValid(this.event) || !Float.isFinite(this.diveYaw)) return;
+       Entity var2 = var1.world.getEntityByID(this.playerID);
+       if (var2 != null && (var2 != var1 || Anim.get(this.event) == Anim.CAIDA)) {
+          PlayerParameter var3 = PlayerParameter.getParameter(var2, "EntitySportsman");
+@@ -71,6 +72,7 @@
+ 
+    @Override
+    public void handleServerSide(EntityPlayer var1) {
++      if (var1 == null || !Anim.isValid(this.event) || !Float.isFinite(this.diveYaw)) return;
+       this.playerID = var1.getEntityId();
+       if (Anim.get(this.event) == Anim.ESTIRADA
+          && var1.getHeldItemMainhand().getItem() != SportsMod.glove
+--- a/src/main/java/net/sports/network/PacketInHand.java
++++ b/src/main/java/net/sports/network/PacketInHand.java
+@@ -70,6 +70,7 @@
+ 
+    @Override
+    public void handleServerSide(EntityPlayer var1) {
+-      SportsMod.packetPipeline.sendToAll(this);
++      // Pickup/release state is produced by EntityBall on the server.
++      // A client must not relay a fabricated ownership state to other players.
+    }
+ }
+--- a/src/main/java/net/sports/network/PacketKeys.java
++++ b/src/main/java/net/sports/network/PacketKeys.java
+@@ -37,6 +37,7 @@
+ 
+    @Override
+    public void handleServerSide(EntityPlayer var1) {
++      if (!Float.isFinite(this.value)) return;
+       if (var1 instanceof EntityPlayerMP) {
+          EntityPlayerMP var2 = (EntityPlayerMP)var1;
+          if (var2.isSpectator()) {
+--- a/src/main/java/net/sports/network/PacketPipeline.java
++++ b/src/main/java/net/sports/network/PacketPipeline.java
+@@ -42,7 +42,7 @@
+    }
+ 
+    public boolean registerPacket(Class var1) {
+-      if (this.packets.size() > 256) {
++      if (this.packets.size() >= 256) {
+          return false;
+       } else if (this.packets.contains(var1)) {
+          return false;
+@@ -55,34 +55,50 @@
+    }
+ 
+    protected void encode(ChannelHandlerContext var1, AbstractPacket var2, List<Object> var3) throws Exception {
+-      ByteBuf var4 = Unpooled.buffer();
+       Class var5 = var2.getClass();
+       if (!this.packets.contains(var2.getClass())) {
+          throw new NullPointerException("No Packet Registered for: " + var2.getClass().getCanonicalName());
+       } else {
+-         byte var6 = (byte)this.packets.indexOf(var5);
+-         var4.writeByte(var6);
+-         var2.encodeInto(var1, var4);
+-         FMLProxyPacket var7 = new FMLProxyPacket(new PacketBuffer(var4.copy()), (String)var1.channel().attr(NetworkRegistry.FML_CHANNEL).get());
+-         var3.add(var7);
++         ByteBuf var4 = Unpooled.buffer();
++         boolean transferred = false;
++         try {
++            byte var6 = (byte)this.packets.indexOf(var5);
++            var4.writeByte(var6);
++            var2.encodeInto(var1, var4);
++            FMLProxyPacket var7 = new FMLProxyPacket(new PacketBuffer(var4), (String)var1.channel().attr(NetworkRegistry.FML_CHANNEL).get());
++            var3.add(var7);
++            transferred = true;
++         } finally {
++            if (!transferred) var4.release();
++         }
+       }
+    }
+ 
+    protected void decode(ChannelHandlerContext var1, FMLProxyPacket var2, List<Object> var3) throws Exception {
+       ByteBuf var4 = var2.payload();
+-      byte var5 = var4.readByte();
++      if (!var4.isReadable()) return;
++      int var5 = var4.readUnsignedByte();
++      if (var5 >= this.packets.size()) return;
+       Class var6 = (Class)this.packets.get(var5);
++      Side side = var1.channel().attr(NetworkRegistry.CHANNEL_SOURCE).get();
++      if (side == null) return;
++      if (side == Side.SERVER && (var6 == PacketCheckID.class || var6 == PacketSprintState.class || var6 == PacketInHand.class)) return;
+       if (var6 == null) {
+          throw new NullPointerException("No packet registered for discriminator: " + var5);
+       } else {
+          final AbstractPacket var7 = (AbstractPacket)var6.newInstance();
+-         var7.decodeInto(var1, var4.slice());
+-         switch (FMLCommonHandler.instance().getEffectiveSide()) {
++         try {
++            var7.decodeInto(var1, var4.slice());
++         } catch (IndexOutOfBoundsException invalidPayload) {
++            return;
++         }
++         switch (side) {
+             case CLIENT:
+                this.scheduleClientPacket(var7);
+                break;
+             case SERVER:
+                INetHandler var8 = (INetHandler)var1.channel().attr(NetworkRegistry.NET_HANDLER).get();
++               if (!(var8 instanceof NetHandlerPlayServer)) return;
+                final EntityPlayerMP var9 = ((NetHandlerPlayServer)var8).player;
+                MinecraftServer var10 = FMLCommonHandler.instance().getMinecraftServerInstance();
+                if (var10 != null) {
+@@ -121,10 +137,13 @@
+    @SideOnly(Side.CLIENT)
+    private void scheduleClientPacket(final AbstractPacket var1) {
+       final Minecraft var2 = Minecraft.getMinecraft();
++      final net.minecraft.client.multiplayer.WorldClient receivedWorld = var2.world;
+       var2.addScheduledTask(new Runnable() {
+          @Override
+          public void run() {
+-            var1.handleClientSide(var2.player);
++            if (var2.player != null && receivedWorld != null && var2.world == receivedWorld) {
++               var1.handleClientSide(var2.player);
++            }
+          }
+       });
+    }
+--- a/src/main/java/net/sports/network/PacketSport.java
++++ b/src/main/java/net/sports/network/PacketSport.java
+@@ -38,6 +38,7 @@
+ 
+    @Override
+    public void handleClientSide(EntityPlayer var1) {
++      if (var1 == null || !Sports.isValid(this.type)) return;
+       Entity var2 = var1.world.getEntityByID(this.playerID);
+       if (var2 != null && var2 != var1) {
+          PlayerParameter.getParameter(var2, "EntitySportsman").sport = Sports.get(this.type);
+@@ -46,6 +47,7 @@
+ 
+    @Override
+    public void handleServerSide(EntityPlayer var1) {
++      if (var1 == null || !Sports.isValid(this.type)) return;
+       this.playerID = var1.getEntityId();
+       SportsMod.packetPipeline.sendToAll(this);
+    }
+--- a/src/main/resources/mcmod.info
++++ b/src/main/resources/mcmod.info
+@@ -3,7 +3,7 @@
+     "modid": "sports",
+     "name": "Proyecto Gol",
+     "description": "Mod de futbol de Proyecto Gol: balones, partidos configurables, camisetas y mas. Basado en el Sports Mod original de nico910.",
+-    "version": "1.6.1",
++    "version": "1.6.2-test1",
+     "mcversion": "1.12.2",
+     "url": "",
+     "updateUrl": "",
+--- /dev/null
++++ b/src/main/java/net/sports/client/HudTiming.java
+@@ -0,0 +1,15 @@
++package net.sports.client;
++
++/** Time-based HUD bookkeeping using the existing 100 Hz input timer. */
++public final class HudTiming {
++    private HudTiming() {}
++    public static int endurance(int current,boolean running,int elapsedTicks) {
++        int energy=Math.max(0,Math.min(6000,current));
++        int steps=Math.max(0,elapsedTicks);
++        if(running) {
++            int drainSteps=Math.min(steps,Math.max(0,(energy-1)/3));
++            return energy-3*drainSteps;
++        }
++        return energy+Math.min(steps,6000-energy);
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/audit/AuditRenderReview.java
+@@ -0,0 +1,114 @@
++package net.sports.audit;
++
++import com.google.gson.GsonBuilder;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.Method;
++import java.nio.ByteBuffer;
++import java.nio.FloatBuffer;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++import java.util.Arrays;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import net.minecraft.client.renderer.GlStateManager;
++import net.minecraft.client.renderer.OpenGlHelper;
++import net.minecraft.client.renderer.entity.RenderManager;
++import net.sports.client.client_Sports;
++import net.sports.client.gui.Hud;
++import net.sports.client.model.ModelTruncatedIcosahedron;
++import net.sports.client.render.RenderBall;
++import net.minecraftforge.fml.common.gameevent.TickEvent;
++import net.minecraftforge.fml.relauncher.Side;
++import org.lwjgl.BufferUtils;
++import org.lwjgl.opengl.Display;
++import org.lwjgl.opengl.DisplayMode;
++import org.lwjgl.opengl.GL11;
++import org.lwjgl.opengl.GL13;
++
++/** Exact image comparison plus a software-OpenGL workload measurement, not game FPS. */
++public final class AuditRenderReview {
++    public static void main(String[] args) throws Exception {
++        Display.setDisplayMode(new DisplayMode(320,320));Display.create();
++        try {
++            OpenGlHelper.defaultTexUnit=GL13.GL_TEXTURE0;OpenGlHelper.lightmapTexUnit=GL13.GL_TEXTURE1;
++            net.minecraft.init.Bootstrap.register();
++            GlStateManager.matrixMode(GL11.GL_PROJECTION);GlStateManager.loadIdentity();GL11.glOrtho(-1.3,1.3,-1.3,1.3,-8,8);
++            GlStateManager.matrixMode(GL11.GL_MODELVIEW);GlStateManager.loadIdentity();
++            GlStateManager.enableDepth();GlStateManager.disableCull();GlStateManager.disableTexture2D();
++            GL11.glEnable(GL11.GL_LIGHTING);GL11.glEnable(GL11.GL_LIGHT0);GL11.glEnable(GL11.GL_COLOR_MATERIAL);
++            GL11.glColorMaterial(GL11.GL_FRONT_AND_BACK,GL11.GL_AMBIENT_AND_DIFFUSE);GL11.glEnable(GL11.GL_NORMALIZE);
++            light(GL11.GL_POSITION,new float[]{-.35f,.75f,.55f,0});
++            light(GL11.GL_DIFFUSE,new float[]{.78f,.78f,.78f,1});light(GL11.GL_AMBIENT,new float[]{.42f,.42f,.42f,1});
++            final byte[] oldBytes=Files.readAllBytes(Paths.get(args[0]));
++            ClassLoader loader=new ClassLoader(AuditRenderReview.class.getClassLoader()) {
++                @Override protected Class<?> loadClass(String name,boolean resolve) throws ClassNotFoundException {
++                    if(name.equals("net.sports.client.render.RenderBall")) {
++                        Class<?> c=findLoadedClass(name);if(c==null)c=defineClass(name,oldBytes,0,oldBytes.length);if(resolve)resolveClass(c);return c;
++                    }
++                    return super.loadClass(name,resolve);
++                }
++            };
++            Class<?> previous=loader.loadClass("net.sports.client.render.RenderBall");
++            Constructor<?> oldCtor=previous.getConstructor(RenderManager.class,String.class,float.class,float.class,float.class);
++            Method oldDraw=previous.getDeclaredMethod("drawTruncated"),newDraw=RenderBall.class.getDeclaredMethod("drawTruncated");
++            oldDraw.setAccessible(true);newDraw.setAccessible(true);
++            int comparisons=0;
++            for(String palette:new String[]{"football","basketball","tennis","baseball"}) {
++                Object old=oldCtor.newInstance(null,palette,.55f,.4f,.001f),now=new RenderBall(null,palette,.55f,.4f,.001f);
++                for(float angle:new float[]{0,27,90,165,270}) {
++                    byte[] before=image(old,oldDraw,angle),after=image(now,newDraw,angle);
++                    if(!Arrays.equals(before,after))throw new AssertionError("Image changed for "+palette+" at "+angle);
++                    comparisons++;
++                }
++            }
++            CountingProxy proxy=new CountingProxy();
++            for(int i=0;i<500;i++)for(TickEvent.Phase phase:TickEvent.Phase.values())proxy.tick(new TickEvent(TickEvent.Type.RENDER,Side.CLIENT,phase));
++            for(int i=0;i<20;i++)for(TickEvent.Phase phase:TickEvent.Phase.values())proxy.tick(new TickEvent(TickEvent.Type.CLIENT,Side.CLIENT,phase));
++            for(TickEvent.Phase phase:TickEvent.Phase.values())proxy.tick(new TickEvent(TickEvent.Type.SERVER,Side.SERVER,phase));
++            if(proxy.renders!=500||proxy.clients!=20)throw new AssertionError("Duplicate client callbacks");
++            Hud.Cross=40;Hud.Circle=50;Hud.curveToggle=true;Hud h=new Hud();h.resetSession();
++            if(Hud.Cross!=0||Hud.Circle!=0||Hud.curveToggle)throw new AssertionError("HUD state survived session reset");
++            Method power=Hud.class.getDeclaredMethod("updatePowerDisplay",int.class);power.setAccessible(true);
++            java.lang.reflect.Field displayed=Hud.class.getDeclaredField("pow");displayed.setAccessible(true);
++            Hud.Circle=40;
++            for(int i=0;i<100;i++){power.invoke(h,10);if(displayed.getFloat(h)!=40)throw new AssertionError("Charge bar flickered while held");}
++            Hud.Circle=0;power.invoke(h,29);if(displayed.getFloat(h)!=40)throw new AssertionError("Charge bar cleared too soon");
++            power.invoke(h,1);if(displayed.getFloat(h)!=0)throw new AssertionError("Charge bar did not expire");
++            Object old=oldCtor.newInstance(null,"football",.55f,.4f,.001f),now=new RenderBall(null,"football",.55f,.4f,.001f);
++            GlStateManager.loadIdentity();GlStateManager.rotate(25,1,0,0);GlStateManager.rotate(30,0,1,0);
++            for(int i=0;i<200;i++){oldDraw.invoke(old);newDraw.invoke(now);}
++            long[] oldTimes=new long[5],newTimes=new long[5];
++            for(int round=0;round<5;round++) {
++                if(round%2==0){oldTimes[round]=time(old,oldDraw);newTimes[round]=time(now,newDraw);}
++                else {newTimes[round]=time(now,newDraw);oldTimes[round]=time(old,oldDraw);}
++            }
++            Arrays.sort(oldTimes);Arrays.sort(newTimes);
++            int vertices=0;for(int[] face:ModelTruncatedIcosahedron.FACES)vertices+=face.length;
++            Map<String,Object> report=new LinkedHashMap<>();report.put("renderer",GL11.glGetString(GL11.GL_RENDERER));
++            report.put("measurement","1000 repeated mesh draws per round, median of 5 rounds; not Minecraft FPS");
++            report.put("exact_image_comparisons",comparisons);report.put("old_gl_calls_per_mesh",vertices+4*ModelTruncatedIcosahedron.FACES.length);
++            report.put("test_gl_calls_per_cached_mesh",1);report.put("old_median_ns_per_draw",oldTimes[2]/1000.0);
++            report.put("test_median_ns_per_draw",newTimes[2]/1000.0);report.put("render_callbacks_per_500_frames",proxy.renders);
++            report.put("client_callbacks_per_20_ticks",proxy.clients);report.put("hud_reset",true);report.put("charge_bar_held_and_expiry",true);report.put("game_session_tested",false);
++            int error=GL11.glGetError();if(error!=0)throw new AssertionError("OpenGL error "+error);
++            report.put("opengl_error",error);
++            String json=new GsonBuilder().setPrettyPrinting().create().toJson(report);Files.write(Paths.get(args[1]),json.getBytes(java.nio.charset.StandardCharsets.UTF_8));System.out.println(json);
++        } finally {Display.destroy();}
++    }
++    private static long time(Object renderer,Method method) throws Exception {
++        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);GL11.glFinish();long start=System.nanoTime();
++        for(int i=0;i<1000;i++)method.invoke(renderer);GL11.glFinish();return System.nanoTime()-start;
++    }
++    private static byte[] image(Object renderer,Method method,float angle) throws Exception {
++        GL11.glClearColor(.04f,.06f,.08f,1);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
++        GlStateManager.loadIdentity();GlStateManager.rotate(20,1,0,0);GlStateManager.rotate(angle,0,1,0);method.invoke(renderer);
++        ByteBuffer p=BufferUtils.createByteBuffer(320*320*4);GL11.glReadPixels(0,0,320,320,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,p);
++        byte[] bytes=new byte[p.capacity()];p.get(bytes);return bytes;
++    }
++    private static void light(int type,float[] values) {FloatBuffer b=BufferUtils.createFloatBuffer(4);b.put(values).flip();GL11.glLight(GL11.GL_LIGHT0,type,b);}
++    private static final class CountingProxy extends client_Sports {
++        int renders,clients;
++        @Override public void onRenderTick(){renders++;}
++        @Override public void onClientTick(){clients++;}
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/HudTimingTest.java
+@@ -0,0 +1,29 @@
++package net.sports.client;
++
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class HudTimingTest {
++    @Test public void oneSecondOfRunningHasTheSameCostRegardlessOfFrameChunking() {
++        for(int[] chunks:new int[][]{{1},{2},{5},{6,7,7},{10}}) {
++            int energy=6000,total=0,index=0;
++            while(total<100){int steps=Math.min(100-total,chunks[index++%chunks.length]);energy=HudTiming.endurance(energy,true,steps);total+=steps;}
++            assertEquals(5700,energy);
++        }
++    }
++    @Test public void recoveryUsesElapsedTimeAndStopsAtTheMaximum() {
++        assertEquals(1100,HudTiming.endurance(1000,false,100));
++        assertEquals(6000,HudTiming.endurance(5990,false,100));
++        assertEquals(6000,HudTiming.endurance(0,false,Integer.MAX_VALUE));
++    }
++    @Test public void batchedDrainMatchesTheExistingSingleStepRuleExactly() {
++        for(int initial=0;initial<=6000;initial+=17)for(int steps:new int[]{0,1,2,3,10,100,1000,10000}) {
++            int reference=initial;for(int i=0;i<steps;i++)if(reference>3)reference-=3;
++            assertEquals(reference,HudTiming.endurance(initial,true,steps));
++        }
++    }
++    @Test public void pausedOrInvalidElapsedTimeDoesNotDrainStamina() {
++        assertEquals(1000,HudTiming.endurance(1000,true,0));assertEquals(1000,HudTiming.endurance(1000,true,-10));
++        assertEquals(3,HudTiming.endurance(3,true,100));assertEquals(0,HudTiming.endurance(0,true,100));
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/settings/SettingsAuditTest.java
+@@ -0,0 +1,59 @@
++package net.sports.client.settings;
++
++import java.io.File;
++import java.lang.reflect.Field;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.util.HashMap;
++import java.util.Map;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TemporaryFolder;
++import static org.junit.Assert.*;
++
++public class SettingsAuditTest {
++    @Rule public TemporaryFolder temp=new TemporaryFolder();
++    private final Map<Field,Object> previous=new HashMap<>();
++    @Before public void capture() throws Exception {
++        for(Field f:Settings.class.getDeclaredFields())if(java.lang.reflect.Modifier.isStatic(f.getModifiers())&&!java.lang.reflect.Modifier.isFinal(f.getModifiers())) {
++            f.setAccessible(true);previous.put(f,f.get(null));
++        }
++    }
++    @After public void restore() throws Exception {for(Map.Entry<Field,Object> e:previous.entrySet())e.getKey().set(null,e.getValue());}
++    @Test public void corruptedNumericOptionsCannotCrashTheMenuOrProduceNanGeometry() throws Exception {
++        load("Hud:999\nBallsRenderPrecision:-3\nBallsRenderDistance:NaN\nKeyCrossSensitivity:Infinity\nKeyCircleSensitivity:-50\nBallIndicator:1\n");
++        Settings s=new Settings();assertEquals(0,Settings.hud);assertEquals(0,Settings.precision);
++        assertEquals(.5f,Settings.ball,0);assertEquals(.5f,Settings.cross,0);assertEquals(0,Settings.circle,0);assertTrue(Settings.ballIndicator);
++        assertNotNull(s.getKeyBinding(Options.HUD));assertNotNull(s.getKeyBinding(Options.PRECISION));
++    }
++    @Test public void finiteValuesAreClampedAndWhitespaceIsAccepted() throws Exception {
++        load(" Hud : 2 \nBallsRenderPrecision:7\nBallsRenderDistance: 3\nKeyCrossSensitivity:-2\nKeyCircleSensitivity:0.75\n");
++        assertEquals(2,Settings.hud);assertEquals(7,Settings.precision);assertEquals(1,Settings.ball,0);
++        assertEquals(0,Settings.cross,0);assertEquals(.75f,Settings.circle,0);
++    }
++    @Test public void nonFiniteFlagsUseDefaultsInsteadOfEnablingFeaturesAccidentally() throws Exception {
++        load("SprintToggle:NaN\nRangeCircle:Infinity\nMateMarks:NaN\nShotCooldown:Infinity\nBallIndicator:NaN\n");
++        assertFalse(Settings.sprintToggle);assertFalse(Settings.rangeCircle);assertFalse(Settings.marks);
++        assertTrue(Settings.shotCooldown);assertFalse(Settings.ballIndicator);
++    }
++    @Test public void menuLabelsRemainSafeForInvalidRuntimeIndices() {
++        Settings.hud=-99;Settings.precision=Integer.MAX_VALUE;Settings s=new Settings();
++        assertEquals("Interfaz en pantalla: Completa",s.getKeyBinding(Options.HUD));
++        assertEquals("Calidad de render de balones: 2D",s.getKeyBinding(Options.PRECISION));
++    }
++    @Test public void cyclingHudBackwardsWrapsInsteadOfProducingANegativeIndex() {
++        Settings.hud=0;Settings s=new Settings();s.setOptionValue(Options.HUD,-1);assertEquals(3,Settings.hud);
++        s.setOptionValue(Options.HUD,1);assertEquals(0,Settings.hud);
++    }
++    @Test public void sliderApiRejectsNonFiniteValues() {
++        Settings s=new Settings();s.setOptionFloatValue(Options.BALL,Float.NaN);s.setOptionFloatValue(Options.CROSS,Float.POSITIVE_INFINITY);
++        assertEquals(.5f,Settings.ball,0);assertEquals(.5f,Settings.cross,0);
++    }
++    private void load(String contents) throws Exception {
++        File f=temp.newFile();Files.write(f.toPath(),contents.getBytes(StandardCharsets.UTF_8));
++        set("optionsFile",f);set("idsFile",new File(temp.getRoot(),"no-ids"));new Settings().loadOptions();
++    }
++    private static void set(String name,Object value) throws Exception {Field f=Settings.class.getDeclaredField(name);f.setAccessible(true);f.set(null,value);}
++}
+--- /dev/null
++++ b/src/test/java/net/sports/match/SessionAuditTest.java
+@@ -0,0 +1,27 @@
++package net.sports.match;
++
++import java.lang.reflect.Field;
++import net.sports.Anim;
++import net.sports.Sports;
++import net.sports.match.client.MatchClient;
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class SessionAuditTest {
++    @Test public void disconnectClearsScoreboardPitchAndPlayerLabels() throws Exception {
++        MatchClient.sbVisible=true;MatchClient.sbPaused=true;MatchClient.sbScoreA=7;MatchClient.sbScoreB=4;
++        MatchClient.sbNameA="Old team";MatchClient.sbClock="99:59";MatchClient.myNumber=10;MatchClient.myShirtName="Old name";
++        MatchClient.shirtNumbers.put("old-player",10);MatchClient.shirtNames.put("old-player","Old name");
++        Field pitch=MatchClient.class.getDeclaredField("pitchCfg");pitch.setAccessible(true);pitch.set(null,new MatchConfig());
++        MatchClient.resetSession();
++        assertFalse(MatchClient.sbVisible);assertFalse(MatchClient.sbPaused);assertEquals(0,MatchClient.sbScoreA);
++        assertEquals("",MatchClient.sbNameA);assertEquals("",MatchClient.sbClock);assertEquals(0,MatchClient.myNumber);
++        assertTrue(MatchClient.shirtNumbers.isEmpty());assertTrue(MatchClient.shirtNames.isEmpty());assertNull(MatchClient.pitchConfig());
++    }
++    @Test public void enumValidationPreservesAllValidIdsAndRejectsMalformedIds() {
++        for(Anim a:Anim.values()){assertTrue(Anim.isValid(a.ordinal()));assertSame(a,Anim.get(a.ordinal()));}
++        for(Sports s:Sports.values()){assertTrue(Sports.isValid(s.ordinal()));assertSame(s,Sports.get(s.ordinal()));}
++        for(int id:new int[]{-1,Integer.MIN_VALUE,Integer.MAX_VALUE}){assertFalse(Anim.isValid(id));assertFalse(Sports.isValid(id));}
++        assertFalse(Anim.isValid(Anim.values().length));assertFalse(Sports.isValid(Sports.values().length));
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/network/PacketPipelineAuditTest.java
+@@ -0,0 +1,95 @@
++package net.sports.network;
++
++import io.netty.buffer.ByteBuf;
++import io.netty.buffer.Unpooled;
++import io.netty.channel.ChannelHandlerContext;
++import io.netty.channel.ChannelInboundHandlerAdapter;
++import io.netty.channel.embedded.EmbeddedChannel;
++import java.util.ArrayList;
++import java.util.List;
++import net.minecraft.entity.player.EntityPlayer;
++import net.minecraft.network.PacketBuffer;
++import net.minecraftforge.fml.common.network.NetworkRegistry;
++import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
++import net.minecraftforge.fml.relauncher.Side;
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class PacketPipelineAuditTest {
++    @Test public void existingWireIdsAndPayloadStayUnchanged() throws Exception {
++        Probe codec=new Probe();codec.registerPackets();codec.postInitialise();
++        EmbeddedChannel channel=channel();List<Object> out=new ArrayList<>();
++        try {
++            codec.write(channel.pipeline().firstContext(),new PacketSprintState(317,true),out);
++            ByteBuf b=((FMLProxyPacket)out.get(0)).payload();
++            try {assertEquals(6,b.readableBytes());assertEquals(5,b.readUnsignedByte());assertEquals(317,b.readInt());assertTrue(b.readBoolean());}
++            finally {b.release();assertEquals(0,b.refCnt());}
++        } finally {channel.finishAndReleaseAll();}
++    }
++    @Test public void failedEncodingReleasesItsBuffer() throws Exception {
++        Probe codec=new Probe();codec.registerPacket(FailingPacket.class);codec.postInitialise();
++        EmbeddedChannel channel=channel();FailingPacket packet=new FailingPacket();
++        try {
++            try {codec.write(channel.pipeline().firstContext(),packet,new ArrayList<>());fail("encoding must fail");}
++            catch(IllegalArgumentException expected){assertNotNull(packet.buffer);assertEquals(0,packet.buffer.refCnt());}
++        } finally {channel.finishAndReleaseAll();}
++    }
++    @Test public void emptyUnknownAndTruncatedPacketsAreIgnored() throws Exception {
++        Probe codec=new Probe();codec.registerPacket(CapturingPacket.class);codec.postInitialise();
++        EmbeddedChannel channel=channel();CapturingPacket.decoded=0;
++        try {
++            for(ByteBuf b:new ByteBuf[]{Unpooled.buffer(0),Unpooled.buffer().writeByte(255),Unpooled.buffer().writeByte(0).writeByte(1)}) {
++                try {codec.read(channel.pipeline().firstContext(),new FMLProxyPacket(new PacketBuffer(b),"GCA"));}
++                finally {b.release();}
++            }
++            assertEquals(0,CapturingPacket.decoded);
++        } finally {channel.finishAndReleaseAll();}
++    }
++    @Test public void receiverSideComesFromTheChannelRatherThanTheCurrentThread() throws Exception {
++        Probe codec=new Probe();codec.registerPacket(CapturingPacket.class);codec.postInitialise();
++        EmbeddedChannel channel=channel();CapturingPacket.decoded=0;
++        ByteBuf b=Unpooled.buffer().writeByte(0).writeInt(12345);
++        try {
++            // There is no Minecraft client singleton or server player in this test.
++            // Correct SERVER routing decodes and safely skips the absent handler.
++            codec.read(channel.pipeline().firstContext(),new FMLProxyPacket(new PacketBuffer(b),"GCA"));
++            assertEquals(12345,CapturingPacket.decoded);
++        } finally {b.release();channel.finishAndReleaseAll();}
++    }
++    @Test public void clientOnlyPacketsDoNotInstantiateClientStateOnTheServer() throws Exception {
++        Probe codec=new Probe();codec.registerPackets();codec.postInitialise();EmbeddedChannel channel=channel();
++        try {
++            for(int id:new int[]{0,2,5}) {
++                ByteBuf b=Unpooled.buffer().writeByte(id);
++                try {codec.read(channel.pipeline().firstContext(),new FMLProxyPacket(new PacketBuffer(b),"GCA"));}
++                finally {b.release();}
++            }
++        } finally {channel.finishAndReleaseAll();}
++    }
++    @Test public void clientsCannotRebroadcastFabricatedPickupOrReleaseState() {
++        new PacketInHand(123,456,true).handleServerSide(null);
++        new PacketInHand(123,456,false).handleServerSide(null);
++    }
++    private static EmbeddedChannel channel() {
++        EmbeddedChannel c=new EmbeddedChannel(new ChannelInboundHandlerAdapter());
++        c.attr(NetworkRegistry.CHANNEL_SOURCE).set(Side.SERVER);c.attr(NetworkRegistry.FML_CHANNEL).set("GCA");return c;
++    }
++    private static final class Probe extends PacketPipeline {
++        void write(ChannelHandlerContext c,AbstractPacket p,List<Object> out) throws Exception {super.encode(c,p,out);}
++        void read(ChannelHandlerContext c,FMLProxyPacket p) throws Exception {super.decode(c,p,new ArrayList<>());}
++    }
++    public static final class FailingPacket extends AbstractPacket {
++        ByteBuf buffer;
++        public void encodeInto(ChannelHandlerContext c,ByteBuf b){buffer=b;throw new IllegalArgumentException("test encoder failure");}
++        public void decodeInto(ChannelHandlerContext c,ByteBuf b){}
++        public void handleClientSide(EntityPlayer p){}
++        public void handleServerSide(EntityPlayer p){}
++    }
++    public static final class CapturingPacket extends AbstractPacket {
++        static int decoded;
++        public void encodeInto(ChannelHandlerContext c,ByteBuf b){}
++        public void decodeInto(ChannelHandlerContext c,ByteBuf b){int value=b.readInt();decoded=value;}
++        public void handleClientSide(EntityPlayer p){}
++        public void handleServerSide(EntityPlayer p){}
++    }
++}
