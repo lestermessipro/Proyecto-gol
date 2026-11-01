@@ -1,0 +1,843 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -6,7 +6,7 @@
+     dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+ }
+ apply plugin: 'net.minecraftforge.gradle'
+-version = '1.6.3-test1'
++version = '1.6.3-test2'
+ group = 'net.sports'
+ archivesBaseName = 'ProyectoGol'
+ sourceCompatibility = targetCompatibility = '1.8'
+--- a/src/main/java/net/sports/SportsMod.java
++++ b/src/main/java/net/sports/SportsMod.java
+@@ -33,7 +33,7 @@
+ import net.sports.network.PacketPipeline;
+ import net.sports.settings.Settings;
+ 
+-@Mod(modid = "sports", name = "sports", version = "1.6.3-test1")
++@Mod(modid = "sports", name = "sports", version = "1.6.3-test2")
+ public class SportsMod {
+    @SidedProxy(clientSide = "net.sports.client.client_Sports", serverSide = "net.sports.common_Sports")
+    public static common_Sports proxy;
+--- a/src/main/java/net/sports/client/gui/Hud.java
++++ b/src/main/java/net/sports/client/gui/Hud.java
+@@ -15,6 +15,7 @@
+ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+ import net.minecraft.util.SoundEvent;
+ import net.minecraft.util.Timer;
++import net.minecraft.util.ResourceLocation;
+ import net.minecraft.util.math.MathHelper;
+ import net.sports.Anim;
+ import net.sports.SportsMod;
+@@ -29,6 +30,7 @@
+ import net.sports.entity.EntityBall;
+ import net.sports.match.client.MatchClient;
+ import net.sports.network.PacketKeys;
++import net.sports.kit.client.ClubCrests;
+ import org.lwjgl.opengl.GL11;
+ 
+ public class Hud {
+@@ -38,6 +40,7 @@
+    public EntitySportsman sportsman;
+    PlayerParameter playerParameter;
+    ScaledResolution var3;
++   private ScoreboardLayout scoreLayout;
+    float pow;
+    int inc = 0;
+    int fullTicks = -1;
+@@ -358,43 +361,40 @@
+    }
+ 
+    private void drawScoreboard() {
+-      if (MatchClient.sbVisible) {
+-         GlStateManager.pushMatrix();
+-         GlStateManager.scale(0.65F, 0.65F, 1.0F);
+-         FontRenderer var1 = this.mc.fontRenderer;
+-         byte var2 = 10;
+-         byte var3x = 8;
+-         byte var4 = 24;
+-         String var5 = var1.trimStringToWidth(MatchClient.sbNameA == null ? "" : MatchClient.sbNameA, 70);
+-         String var6 = var1.trimStringToWidth(MatchClient.sbNameB == null ? "" : MatchClient.sbNameB, 70);
+-         int var7 = var1.getStringWidth(var5);
+-         int var8 = var1.getStringWidth(var6);
+-         byte var9 = 118;
+-         byte var10 = 28;
+-         byte var11 = 17;
+-         byte var12 = 16;
+-         int var13 = var9 + var7 + 10 + var10 + var12 + var10 + 8 + var8 + 12;
+-         Gui.drawRect(var2, var3x, var2 + var13, var3x + var4, -15197134);
+-         Gui.drawRect(var2, var3x + var4 - 1, var2 + var13, var3x + var4, -14012603);
+-         int var14 = var3x + (var4 - var11) / 2;
+-         int var15 = var2 + var9 + var7 + 10;
+-         int var16 = var15 + var10 + var12;
+-         Gui.drawRect(var15, var14, var15 + var10, var14 + var11, MatchClient.sbBoxA);
+-         Gui.drawRect(var16, var14, var16 + var10, var14 + var11, MatchClient.sbBoxB);
+-         int var17 = MatchClient.sbPaused ? -43691 : -76288;
+-         var1.drawStringWithShadow(MatchClient.sbPeriod, var2 + 10, var3x + 8, -1185046);
+-         var1.drawStringWithShadow(MatchClient.sbClock, var2 + 68, var3x + 4, var17);
+-         var1.drawStringWithShadow(MatchClient.sbTotal, var2 + 72, var3x + 14, -5331040);
+-         var1.drawStringWithShadow(var5, var2 + var9, var3x + 8, MatchClient.sbColorA);
+-         var1.drawStringWithShadow(var6, var16 + var10 + 8, var3x + 8, MatchClient.sbColorB);
+-         String var18 = String.valueOf(MatchClient.sbScoreA);
+-         String var19 = String.valueOf(MatchClient.sbScoreB);
+-         int var20 = var14 + (var11 - 8) / 2;
+-         var1.drawStringWithShadow(var18, var15 + (var10 - var1.getStringWidth(var18)) / 2, var20, -855307);
+-         var1.drawStringWithShadow(var19, var16 + (var10 - var1.getStringWidth(var19)) / 2, var20, -855307);
+-         var1.drawStringWithShadow("-", var15 + var10 + (var12 - var1.getStringWidth("-")) / 2, var3x + 8, -6643538);
++      if (!MatchClient.sbVisible) return;
++      FontRenderer font = this.mc.fontRenderer;
++      String nameA = font.trimStringToWidth(MatchClient.sbNameA == null ? "" : MatchClient.sbNameA, 70);
++      String nameB = font.trimStringToWidth(MatchClient.sbNameB == null ? "" : MatchClient.sbNameB, 70);
++      ResourceLocation crestA = ClubCrests.forTeam(MatchClient.sbKitA.isEmpty() ? MatchClient.sbNameA : MatchClient.sbKitA);
++      ResourceLocation crestB = ClubCrests.forTeam(MatchClient.sbKitB.isEmpty() ? MatchClient.sbNameB : MatchClient.sbKitB);
++      int widthA = font.getStringWidth(nameA), widthB = font.getStringWidth(nameB);
++      if (scoreLayout == null || scoreLayout.nameWidthA != widthA || scoreLayout.nameWidthB != widthB
++         || scoreLayout.crestA != (crestA != null) || scoreLayout.crestB != (crestB != null)) {
++         scoreLayout = new ScoreboardLayout(widthA, widthB, crestA != null, crestB != null);
++      }
++      ScoreboardLayout layout = scoreLayout;
++      int x = ScoreboardLayout.LEFT, y = ScoreboardLayout.TOP, scoreY = y + 3;
++      GlStateManager.pushMatrix();
++      try {
++         float scale = layout.scaleFor(this.var3.getScaledWidth());
++         GlStateManager.scale(scale, scale, 1);
++         Gui.drawRect(x, y, x + layout.width, y + 24, -15197134);
++         Gui.drawRect(x, y + 23, x + layout.width, y + 24, -14012603);
++         Gui.drawRect(layout.scoreAX, scoreY, layout.scoreAX + 28, scoreY + 17, MatchClient.sbBoxA);
++         Gui.drawRect(layout.scoreBX, scoreY, layout.scoreBX + 28, scoreY + 17, MatchClient.sbBoxB);
++         font.drawStringWithShadow(MatchClient.sbPeriod, x + 10, y + 8, -1185046);
++         font.drawStringWithShadow(MatchClient.sbClock, x + 68, y + 4, MatchClient.sbPaused ? -43691 : -76288);
++         font.drawStringWithShadow(MatchClient.sbTotal, x + 72, y + 14, -5331040);
++         font.drawStringWithShadow(nameA, layout.nameAX, y + 8, MatchClient.sbColorA);
++         font.drawStringWithShadow(nameB, layout.nameBX, y + 8, MatchClient.sbColorB);
++         String scoreA = String.valueOf(MatchClient.sbScoreA), scoreB = String.valueOf(MatchClient.sbScoreB);
++         font.drawStringWithShadow(scoreA, layout.scoreAX + (28 - font.getStringWidth(scoreA)) / 2, scoreY + 4, -855307);
++         font.drawStringWithShadow(scoreB, layout.scoreBX + (28 - font.getStringWidth(scoreB)) / 2, scoreY + 4, -855307);
++         font.drawStringWithShadow("-", layout.scoreAX + 28 + (16 - font.getStringWidth("-")) / 2, y + 8, -6643538);
++         ScoreboardCrests.render(crestA, crestB, layout);
++      } finally {
+          GlStateManager.popMatrix();
+-         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
++         GlStateManager.color(1, 1, 1, 1);
+       }
+    }
+ 
+--- a/src/main/java/net/sports/kit/KitRegistrar.java
++++ b/src/main/java/net/sports/kit/KitRegistrar.java
+@@ -14,7 +14,7 @@
+ 
+ @EventBusSubscriber(modid = "sports")
+ public final class KitRegistrar {
+-   public static final String[] TEAMS = new String[]{"barcelona", "realmadrid", "arbitro", "boca", "river"};
++   public static final String[] TEAMS = new String[]{"barcelona", "realmadrid", "arbitro", "boca", "river", "estudiantes"};
+    public static final Item[] JERSEYS = new Item[TEAMS.length];
+    public static final Item[] SHORTS = new Item[TEAMS.length];
+ 
+@@ -37,6 +37,8 @@
+          return "Real Madrid";
+       } else if ("boca".equals(var1)) {
+          return "Boca Juniors";
++      } else if ("estudiantes".equals(var1)) {
++         return "Estudiantes de La Plata";
+       } else {
+          return "river".equals(var1) ? "River Plate" : Character.toUpperCase(var1.charAt(0)) + var1.substring(1);
+       }
+--- a/src/main/java/net/sports/kit/client/ClubCrests.java
++++ b/src/main/java/net/sports/kit/client/ClubCrests.java
+@@ -11,6 +11,8 @@
+ import net.minecraftforge.fml.relauncher.Side;
+ import net.minecraftforge.fml.relauncher.SideOnly;
+ import net.sports.kit.KitRegistrar;
++import net.sports.match.TeamInfo;
++import net.sports.match.TeamRegistry;
+ import org.lwjgl.BufferUtils;
+ import org.lwjgl.opengl.GL11;
+ import org.lwjgl.opengl.GL14;
+@@ -33,6 +35,13 @@
+     }
+ 
+     private ClubCrests() {}
++
++    /** The same packaged image is shared by shirts and the match scoreboard. */
++    public static ResourceLocation forTeam(String idOrName) {
++        TeamInfo team = TeamRegistry.find(idOrName);
++        int index = KitRegistrar.indexOf(team == null ? idOrName : team.kit);
++        return index < 0 ? null : TEXTURES[index];
++    }
+ 
+     static ResourceLocation forJersey(ItemStack jersey) {
+         if (jersey == null || jersey.isEmpty()) return null;
+--- a/src/main/java/net/sports/kit/client/Dorsales.java
++++ b/src/main/java/net/sports/kit/client/Dorsales.java
+@@ -60,7 +60,7 @@
+          return 16765471;
+       } else if ("realmadrid".equals(var0)) {
+          return 1118481;
+-      } else if ("river".equals(var0)) {
++      } else if ("river".equals(var0) || "estudiantes".equals(var0)) {
+          return 1118481;
+       } else if ("boca".equals(var0)) {
+          return 16777215;
+@@ -70,7 +70,7 @@
+    }
+ 
+    private static int outlineOf(String var0) {
+-      if ("realmadrid".equals(var0) || "river".equals(var0)) {
++      if ("realmadrid".equals(var0) || "river".equals(var0) || "estudiantes".equals(var0)) {
+          return -1;
+       } else {
+          return !"barcelona".equals(var0) && !"boca".equals(var0) ? 0 : 529468;
+--- a/src/main/java/net/sports/match/MatchManager.java
++++ b/src/main/java/net/sports/match/MatchManager.java
+@@ -2699,6 +2699,10 @@
+       var1.scoreB = this.engine.getScore(Team.B);
+       var1.nameA = this.cfg.teamAName;
+       var1.nameB = this.cfg.teamBName;
++      TeamInfo crestTeamA = TeamRegistry.find(this.selectedTeam(Team.A));
++      TeamInfo crestTeamB = TeamRegistry.find(this.selectedTeam(Team.B));
++      var1.kitA = crestTeamA == null ? "" : crestTeamA.kit;
++      var1.kitB = crestTeamB == null ? "" : crestTeamB.kit;
+       var1.colorA = this.teamColor(Team.A);
+       var1.colorB = this.teamColor(Team.B);
+       var1.boxA = this.teamBoxColor(Team.A);
+--- a/src/main/java/net/sports/match/MatchNetwork.java
++++ b/src/main/java/net/sports/match/MatchNetwork.java
+@@ -390,6 +390,8 @@
+       public String total = "";
+       public String nameA = "";
+       public String nameB = "";
++      public String kitA = "";
++      public String kitB = "";
+       public int colorA;
+       public int colorB;
+       public int boxA;
+@@ -412,6 +414,9 @@
+          this.boxB = var1.readInt();
+          this.scoreA = var1.readInt();
+          this.scoreB = var1.readInt();
++         // Older scoreboards end after the scores. Keep their name fallback.
++         this.kitA = var1.isReadable() ? ByteBufUtils.readUTF8String(var1) : "";
++         this.kitB = var1.isReadable() ? ByteBufUtils.readUTF8String(var1) : "";
+       }
+ 
+       @Override
+@@ -429,6 +434,8 @@
+          var1.writeInt(this.boxB);
+          var1.writeInt(this.scoreA);
+          var1.writeInt(this.scoreB);
++         ByteBufUtils.writeUTF8String(var1, this.kitA == null ? "" : this.kitA);
++         ByteBufUtils.writeUTF8String(var1, this.kitB == null ? "" : this.kitB);
+       }
+    }
+ 
+@@ -541,7 +548,9 @@
+             var1.boxA,
+             var1.boxB,
+             var1.scoreA,
+-            var1.scoreB
++            var1.scoreB,
++            var1.kitA,
++            var1.kitB
+          );
+          return null;
+       }
+--- a/src/main/java/net/sports/match/TeamRegistry.java
++++ b/src/main/java/net/sports/match/TeamRegistry.java
+@@ -54,5 +54,6 @@
+       teams.add(new TeamInfo("Real Madrid", "#FEBE10", "#00529F", "realmadrid"));
+       teams.add(new TeamInfo("Boca Juniors", "#F2C200", "#0A3D91", "boca"));
+       teams.add(new TeamInfo("River Plate", "#FFFFFF", "#D0202C", "river"));
++      teams.add(new TeamInfo("Estudiantes de La Plata", "#FFFFFF", "#C51D32", "estudiantes"));
+    }
+ }
+--- a/src/main/java/net/sports/match/client/MatchClient.java
++++ b/src/main/java/net/sports/match/client/MatchClient.java
+@@ -50,6 +50,8 @@
+    public static String sbTotal = "";
+    public static String sbNameA = "";
+    public static String sbNameB = "";
++   public static String sbKitA = "";
++   public static String sbKitB = "";
+    public static int sbColorA = -441790;
+    public static int sbColorB = -12268289;
+    public static int sbBoxA = -13092021;
+@@ -212,7 +214,9 @@
+       final int var9,
+       final int var10,
+       final int var11,
+-      final int var12
++      final int var12,
++      final String kitA,
++      final String kitB
+    ) {
+       Minecraft var13 = Minecraft.getMinecraft();
+       var13.addScheduledTask(new Runnable() {
+@@ -225,6 +229,8 @@
+             MatchClient.sbTotal = var4 == null ? "" : var4;
+             MatchClient.sbNameA = var5 == null ? "" : var5;
+             MatchClient.sbNameB = var6 == null ? "" : var6;
++            MatchClient.sbKitA = kitA == null ? "" : kitA;
++            MatchClient.sbKitB = kitB == null ? "" : kitB;
+             MatchClient.sbColorA = var7;
+             MatchClient.sbColorB = var8;
+             MatchClient.sbBoxA = var9;
+@@ -343,6 +349,7 @@
+       fieldActive = false;fieldDim = Integer.MIN_VALUE;pitchCfg = null;
+       sbVisible = sbPaused = false;sbScoreA = sbScoreB = 0;
+       sbPeriod = sbClock = sbTotal = sbNameA = sbNameB = "";
++      sbKitA = sbKitB = "";
+       replaySbVisible = false;
+       replaySbA = -1;
+       replaySbB = -1;
+--- a/src/main/resources/assets/sports/lang/en_US.lang
++++ b/src/main/resources/assets/sports/lang/en_US.lang
+@@ -15,3 +15,5 @@
+ Sports=Proyecto Gol
+ item.FieldMarker.name=Field Marker
+ item.TeamManager.name=Team Manager
++item.kit_estudiantes_jersey.name=Estudiantes de La Plata Jersey
++item.kit_estudiantes_shorts.name=Estudiantes de La Plata Shorts
+--- a/src/main/resources/assets/sports/lang/en_us.lang
++++ b/src/main/resources/assets/sports/lang/en_us.lang
+@@ -15,3 +15,5 @@
+ Sports=Proyecto Gol
+ item.FieldMarker.name=Field Marker
+ item.TeamManager.name=Team Manager
++item.kit_estudiantes_jersey.name=Estudiantes de La Plata Jersey
++item.kit_estudiantes_shorts.name=Estudiantes de La Plata Shorts
+--- a/src/main/resources/assets/sports/lang/es_ES.lang
++++ b/src/main/resources/assets/sports/lang/es_ES.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/es_ar.lang
++++ b/src/main/resources/assets/sports/lang/es_ar.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/es_es.lang
++++ b/src/main/resources/assets/sports/lang/es_es.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/es_mx.lang
++++ b/src/main/resources/assets/sports/lang/es_mx.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/es_uy.lang
++++ b/src/main/resources/assets/sports/lang/es_uy.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/es_ve.lang
++++ b/src/main/resources/assets/sports/lang/es_ve.lang
+@@ -10,3 +10,5 @@
+ item.kit_boca_shorts.name=Short de Boca Juniors
+ item.kit_river_jersey.name=Camiseta de River Plate
+ item.kit_river_shorts.name=Short de River Plate
++item.kit_estudiantes_jersey.name=Camiseta de Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short de Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/fr_FR.lang
++++ b/src/main/resources/assets/sports/lang/fr_FR.lang
+@@ -14,3 +14,5 @@
+ itemGroup.tabSports=Proyecto Gol
+ Sports=Proyecto Gol
+ item.FieldMarker.name=Marqueur de terrain
++item.kit_estudiantes_jersey.name=Maillot Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short Estudiantes de La Plata
+--- a/src/main/resources/assets/sports/lang/fr_fr.lang
++++ b/src/main/resources/assets/sports/lang/fr_fr.lang
+@@ -14,3 +14,5 @@
+ itemGroup.tabSports=Proyecto Gol
+ Sports=Proyecto Gol
+ item.FieldMarker.name=Marqueur de terrain
++item.kit_estudiantes_jersey.name=Maillot Estudiantes de La Plata
++item.kit_estudiantes_shorts.name=Short Estudiantes de La Plata
+--- a/src/main/resources/mcmod.info
++++ b/src/main/resources/mcmod.info
+@@ -3,7 +3,7 @@
+     "modid": "sports",
+     "name": "Proyecto Gol",
+     "description": "Mod de futbol de Proyecto Gol: balones, partidos configurables, camisetas y mas. Basado en el Sports Mod original de nico910.",
+-    "version": "1.6.3-test1",
++    "version": "1.6.3-test2",
+     "mcversion": "1.12.2",
+     "url": "",
+     "updateUrl": "",
+--- a/src/test/java/net/sports/client/animation/GaitPreview.java
++++ b/src/test/java/net/sports/client/animation/GaitPreview.java
+@@ -30,6 +30,9 @@
+     private static final int WIDTH=1200, HEIGHT=720;
+     private static final float SCALE=0.0625f;
+     private static int skinTexture, shirtTexture, shortsTexture;
++    private static int crestTexture;
++    private static String kitName;
++    private static java.lang.reflect.Method crestDraw;
+     private static boolean slimPreview;
+     private static boolean actionPreview;
+     private static boolean runningPreview;
+@@ -44,6 +47,8 @@
+         File directory=new File(args[0]); directory.mkdirs();
+         int count=args.length>1?Integer.parseInt(args[1]):210;
+         String team=args.length>2?args[2]:"barcelona";
++        int teamIndex=net.sports.kit.KitRegistrar.indexOf(team);
++        kitName=teamIndex<0?team.toUpperCase():net.sports.kit.KitRegistrar.displayName(teamIndex).toUpperCase();
+         slimPreview=args.length>3&&Boolean.parseBoolean(args[3]);
+         actionPreview=args.length>4&&args[4].equals("actions");
+         runningPreview=args.length>4&&args[4].equals("running");
+@@ -60,6 +65,13 @@
+         shirtTexture=texture(new File("src/main/resources/assets/sports/textures/models/armor/"+team+"_layer_1.png"));
+         shortsTexture=texture(new File("src/main/resources/assets/sports/textures/models/armor/"+team+"_layer_2.png"));
+         if(printPreview)preparePrint(team);
++        if(kitPreview) {
++            File crest=new File("src/main/resources/assets/sports/textures/crests/"+team+".png");
++            if(crest.isFile()) {
++                crestTexture=texture(crest);
++                crestDraw=net.sports.kit.client.ClubCrests.class.getDeclaredMethod("draw",ModelKit.class,float.class);crestDraw.setAccessible(true);
++            }
++        }
+         Avatar jog=new Avatar(), sprint=new Avatar();
+         ByteBuffer pixels=BufferUtils.createByteBuffer(WIDTH*HEIGHT*4);
+         try {
+@@ -80,11 +92,12 @@
+                 Graphics2D g=result.createGraphics();
+                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                 g.setColor(new Color(236,242,247)); g.setFont(new Font("SansSerif",Font.BOLD,25));
+-                String title=kitPreview?"RIVER · FRENTE":printPreview?"DORSAL ANTERIOR":runningPreview?"ANTES · 1.5":actionPreview?TITLES[(frame/60)%SCENES.length]:"CARRERA NORMAL";
+-                g.drawString(title,48,54); g.drawString(kitPreview?"RIVER · ESPALDA":printPreview?"DORSAL INTEGRADO":runningPreview?"CORREGIDO · 1.5.1":actionPreview?title:"SPRINT · BOTÓN CORRER",648,54);
++                String title=kitPreview?kitName+" · FRENTE":printPreview?"DORSAL ANTERIOR":runningPreview?"ANTES · 1.5":actionPreview?TITLES[(frame/60)%SCENES.length]:"CARRERA NORMAL";
++                if(kitPreview)g.setFont(new Font("SansSerif",Font.BOLD,19));
++                g.drawString(title,48,54); g.drawString(kitPreview?kitName+" · ESPALDA":printPreview?"DORSAL INTEGRADO":runningPreview?"CORREGIDO · 1.5.1":actionPreview?title:"SPRINT · BOTÓN CORRER",648,54);
+                 g.setColor(new Color(148,171,190)); g.setFont(new Font("SansSerif",Font.PLAIN,17));
+                 String runningLabel=TITLES[(frame/180)%3]+((frame/90)%2==1?" · sprint":" · carrera normal");
+-                g.drawString(kitPreview?"Tu textura original · 64 × 32":printPreview?"Separación fija · sin iluminación":runningPreview?runningLabel:actionPreview?"Pie derecho · vista lateral":"Apoyo más largo · postura erguida",48,84);
++                g.drawString(kitPreview?"Equipación · escudo integrado en el pecho":printPreview?"Separación fija · sin iluminación":runningPreview?runningLabel:actionPreview?"Pie derecho · vista lateral":"Apoyo más largo · postura erguida",48,84);
+                 g.drawString(kitPreview?"Nombre y dorsal ajustados a la camiseta":printPreview?"Ajustado a la tela · misma iluminación":runningPreview?"Pasos continuos · apoyo · recuperación":actionPreview?"Pie izquierdo · vista frontal":"Impulso · vuelo · recuperación alta",648,84);
+                 g.setColor(new Color(40,61,77));g.drawLine(600,24,600,668);
+                 g.setFont(new Font("SansSerif",Font.PLAIN,14)); g.setColor(new Color(150,171,190));
+@@ -195,6 +208,7 @@
+         avatar.shirt.setVisible(false);avatar.shirt.bipedBody.showModel=true;
+         avatar.shirt.bipedRightArm.showModel=avatar.shirt.bipedLeftArm.showModel=true;
+         avatar.shirt.render(avatar.entity,0,0,0,0,0,SCALE);
++        if(kitPreview&&crestTexture!=0){GlStateManager.bindTexture(crestTexture);crestDraw.invoke(null,avatar.shirt,SCALE);}
+         if(printPreview)drawPrint(avatar,!kitPreview&&!sprint);
+         GlStateManager.bindTexture(shortsTexture);
+         avatar.shorts.setVisible(false);avatar.shorts.bipedRightLeg.showModel=avatar.shorts.bipedLeftLeg.showModel=true;
+--- a/src/test/java/net/sports/kit/client/ClubCrestsTest.java
++++ b/src/test/java/net/sports/kit/client/ClubCrestsTest.java
+@@ -26,7 +26,7 @@
+     }
+ 
+     @Test public void eachClubJerseySelectsItsOwnCrest() {
+-        for (String team : new String[]{"barcelona", "realmadrid", "boca", "river"}) {
++        for (String team : new String[]{"barcelona", "realmadrid", "boca", "river", "estudiantes"}) {
+             Item jersey = KitRegistrar.JERSEYS[KitRegistrar.indexOf(team)];
+             assertEquals(new ResourceLocation("sports", "textures/crests/" + team + ".png"), ClubCrests.forJersey(new ItemStack(jersey)));
+         }
+@@ -43,7 +43,7 @@
+     }
+ 
+     @Test public void everyClubPrintIsPackagedWithTransparentBackground() throws Exception {
+-        for (String team : new String[]{"barcelona", "realmadrid", "boca", "river"}) {
++        for (String team : new String[]{"barcelona", "realmadrid", "boca", "river", "estudiantes"}) {
+             try (InputStream in = getClass().getResourceAsStream("/assets/sports/textures/crests/" + team + ".png")) {
+                 assertNotNull(team, in);
+                 BufferedImage image = ImageIO.read(in);
+--- a/src/test/java/net/sports/match/SessionAuditTest.java
++++ b/src/test/java/net/sports/match/SessionAuditTest.java
+@@ -11,11 +11,13 @@
+     @Test public void disconnectClearsScoreboardPitchAndPlayerLabels() throws Exception {
+         MatchClient.sbVisible=true;MatchClient.sbPaused=true;MatchClient.sbScoreA=7;MatchClient.sbScoreB=4;
+         MatchClient.sbNameA="Old team";MatchClient.sbClock="99:59";MatchClient.myNumber=10;MatchClient.myShirtName="Old name";
++        MatchClient.sbKitA="estudiantes";MatchClient.sbKitB="boca";
+         MatchClient.shirtNumbers.put("old-player",10);MatchClient.shirtNames.put("old-player","Old name");
+         Field pitch=MatchClient.class.getDeclaredField("pitchCfg");pitch.setAccessible(true);pitch.set(null,new MatchConfig());
+         MatchClient.resetSession();
+         assertFalse(MatchClient.sbVisible);assertFalse(MatchClient.sbPaused);assertEquals(0,MatchClient.sbScoreA);
+         assertEquals("",MatchClient.sbNameA);assertEquals("",MatchClient.sbClock);assertEquals(0,MatchClient.myNumber);
++        assertEquals("",MatchClient.sbKitA);assertEquals("",MatchClient.sbKitB);
+         assertTrue(MatchClient.shirtNumbers.isEmpty());assertTrue(MatchClient.shirtNames.isEmpty());assertNull(MatchClient.pitchConfig());
+     }
+     @Test public void enumValidationPreservesAllValidIdsAndRejectsMalformedIds() {
+--- /dev/null
++++ b/src/main/java/net/sports/client/gui/ScoreboardCrests.java
+@@ -0,0 +1,43 @@
++package net.sports.client.gui;
++
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.gui.Gui;
++import net.minecraft.client.renderer.GlStateManager;
++import net.minecraft.util.ResourceLocation;
++import org.lwjgl.opengl.GL11;
++import org.lwjgl.opengl.GL14;
++
++public final class ScoreboardCrests {
++    private ScoreboardCrests() {}
++
++    public static void render(ResourceLocation a, ResourceLocation b, ScoreboardLayout layout) {
++        if (a == null && b == null) return;
++        int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
++        boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
++        int src = GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB), dst = GL11.glGetInteger(GL14.GL_BLEND_DST_RGB);
++        int srcA = GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA), dstA = GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA);
++        try {
++            GlStateManager.color(1, 1, 1, 1);
++            GlStateManager.enableBlend();
++            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
++            draw(a, layout.iconAX); draw(b, layout.iconBX);
++        } finally {
++            GlStateManager.bindTexture(texture);
++            GlStateManager.tryBlendFuncSeparate(src, dst, srcA, dstA);
++            if (!blend) GlStateManager.disableBlend();
++        }
++    }
++
++    private static void draw(ResourceLocation crest, int x) {
++        if (crest == null) return;
++        Minecraft.getMinecraft().getTextureManager().bindTexture(crest);
++        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
++        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
++        drawBound(x);
++    }
++
++    static void drawBound(int x) {
++        Gui.drawModalRectWithCustomSizedTexture(x, ScoreboardLayout.TOP + 3, 0, 0,
++            ScoreboardLayout.ICON, ScoreboardLayout.ICON, ScoreboardLayout.ICON, ScoreboardLayout.ICON);
++    }
++}
+--- /dev/null
++++ b/src/main/java/net/sports/client/gui/ScoreboardLayout.java
+@@ -0,0 +1,25 @@
++package net.sports.client.gui;
++
++/** Logical HUD coordinates before the existing compact scoreboard scaling. */
++public final class ScoreboardLayout {
++    public static final int LEFT = 10, TOP = 8, HEIGHT = 24, ICON = 18;
++    public final int nameWidthA, nameWidthB;
++    public final boolean crestA, crestB;
++    public final int iconAX, iconBX, nameAX, nameBX, scoreAX, scoreBX, width;
++
++    public ScoreboardLayout(int widthA, int widthB, boolean crestA, boolean crestB) {
++        this.nameWidthA = Math.max(0, widthA); this.nameWidthB = Math.max(0, widthB);
++        this.crestA = crestA; this.crestB = crestB;
++        this.iconAX = LEFT + 118;
++        this.nameAX = iconAX + (crestA ? ICON + 4 : 0);
++        this.scoreAX = nameAX + nameWidthA + 10;
++        this.scoreBX = scoreAX + 28 + 16;
++        this.iconBX = scoreBX + 28 + 8;
++        this.nameBX = iconBX + (crestB ? ICON + 4 : 0);
++        this.width = nameBX + nameWidthB + 12 - LEFT;
++    }
++
++    public float scaleFor(int scaledScreenWidth) {
++        return Math.min(.65F, Math.max(1, scaledScreenWidth - 12F) / (LEFT + width));
++    }
++}
+--- /dev/null
++++ b/src/main/resources/assets/sports/models/item/estudiantes_jersey.json
+@@ -0,0 +1,4 @@
++{
++  "parent": "item/generated",
++  "textures": { "layer0": "sports:items/estudiantes_jersey" }
++}
+--- /dev/null
++++ b/src/main/resources/assets/sports/models/item/estudiantes_shorts.json
+@@ -0,0 +1,4 @@
++{
++  "parent": "item/generated",
++  "textures": { "layer0": "sports:items/estudiantes_shorts" }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/gui/ScoreboardLayoutTest.java
+@@ -0,0 +1,26 @@
++package net.sports.client.gui;
++
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class ScoreboardLayoutTest {
++    @Test public void crestSlotsNeverOverlapNamesOrScores() {
++        for(boolean a:new boolean[]{false,true})for(boolean b:new boolean[]{false,true}) {
++            ScoreboardLayout l=new ScoreboardLayout(70,70,a,b);
++            assertTrue(l.nameAX>=l.iconAX+(a?18:0));assertTrue(l.scoreAX>l.nameAX+70);
++            assertTrue(l.scoreBX>l.scoreAX+28);assertTrue(l.nameBX>=l.iconBX+(b?18:0));
++            assertTrue(l.nameBX+70<ScoreboardLayout.LEFT+l.width);
++        }
++    }
++    @Test public void unknownTeamsUseTheOriginalCompactWidthWithoutEmptyLogoBoxes() {
++        ScoreboardLayout plain=new ScoreboardLayout(45,50,false,false),logos=new ScoreboardLayout(45,50,true,true);
++        assertEquals(44,logos.width-plain.width);assertEquals(128,plain.nameAX);
++    }
++    @Test public void fullScoreboardFitsSmallAndLargeGuiWidths() {
++        ScoreboardLayout l=new ScoreboardLayout(70,70,true,true);
++        for(int width:new int[]{200,256,320,480,640}) {
++            float scale=l.scaleFor(width);assertTrue(scale>0&&scale<=.65F);
++            assertTrue((ScoreboardLayout.LEFT+l.width)*scale<=width-11.99);
++        }
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/gui/ScoreboardReview.java
+@@ -0,0 +1,87 @@
++package net.sports.client.gui;
++
++import com.google.gson.GsonBuilder;
++import java.awt.image.BufferedImage;
++import java.io.File;
++import java.nio.ByteBuffer;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import javax.imageio.ImageIO;
++import net.minecraft.client.gui.Gui;
++import net.minecraft.client.renderer.GlStateManager;
++import net.minecraft.client.renderer.OpenGlHelper;
++import net.sports.kit.client.ClubCrests;
++import org.lwjgl.BufferUtils;
++import org.lwjgl.opengl.Display;
++import org.lwjgl.opengl.DisplayMode;
++import org.lwjgl.opengl.GL11;
++import org.lwjgl.opengl.GL13;
++
++/** Standalone layout review using the real logo quad and Minecraft's bitmap font. */
++public final class ScoreboardReview {
++    private static final int W=1200,H=520;
++    private static final Map<String,Integer> crests=new LinkedHashMap<>();
++    private static int font;
++    private static final int[] widths=new int[256];
++
++    public static void main(String[] args) throws Exception {
++        Display.setDisplayMode(new DisplayMode(W,H));Display.create();
++        OpenGlHelper.defaultTexUnit=GL13.GL_TEXTURE0;OpenGlHelper.lightmapTexUnit=GL13.GL_TEXTURE1;
++        try {
++            for(String team:new String[]{"barcelona","realmadrid","boca","river","estudiantes"})crests.put(team,texture(new File("src/main/resources/assets/sports/textures/crests/"+team+".png"),true));
++            BufferedImage ascii=ImageIO.read(new File(args[2]));font=texture(new File(args[2]),false);
++            for(int ch=0;ch<256;ch++){int last=7;while(last>=0){boolean ink=false;for(int y=0;y<8;y++)if((ascii.getRGB((ch%16)*8+last,(ch/16)*8+y)>>>24)>16){ink=true;break;}if(ink)break;last--;}widths[ch]=ch==32?4:last+2;}
++            int checks=0;
++            for(int tex:crests.values()) {
++                GL11.glViewport(0,0,256,256);projection(64,64);clear();GlStateManager.bindTexture(tex);ScoreboardCrests.drawBound(10);
++                ByteBuffer pixels=BufferUtils.createByteBuffer(256*256*4);GL11.glReadPixels(0,0,256,256,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
++                int changed=0;
++                for(int y=0;y<256;y++)for(int x=0;x<256;x++){int i=((255-y)*256+x)*4;if((pixels.get(i)&255)+(pixels.get(i+1)&255)+(pixels.get(i+2)&255)>0){changed++;if(x<40||x>=112||y<44||y>=116)throw new AssertionError("Logo escaped its slot");}}
++                if(changed<100)throw new AssertionError("Missing logo");checks++;
++            }
++            GL11.glViewport(0,0,W,H);projection(W,H);clear();
++            text("PROYECTO GOL - ESCUDOS EN EL MARCADOR",24,22,0xEDF4FA,2);
++            row(85,"Barcelona","Real Madrid","barcelona","realmadrid",2,1,0xFFE11D,0xEEEEEE,0x9A1431,0x1D3164);
++            row(185,"Estudiantes","Boca Juniors","estudiantes","boca",1,0,0xFFFFFF,0xFFD433,0xB91D32,0x174177);
++            row(285,"River Plate","Estudiantes","river","estudiantes",0,0,0xFFFFFF,0xFFFFFF,0xA81730,0xB91D32);
++            row(385,"Local","Visitante","desconocido","",0,0,0xDDDDDD,0xDDDDDD,0x444466,0x443333);
++            text("Revision OpenGL de la distribucion y los escudos; no es una captura de una partida.",24,490,0x9BAEBF,1.5F);
++            BufferedImage result=screenshot();ImageIO.write(result,"png",new File(args[0]));
++            int error=GL11.glGetError();if(error!=0)throw new AssertionError("OpenGL error "+error);
++            Map<String,Object> report=new LinkedHashMap<>();report.put("crest_slot_image_checks",checks);report.put("scoreboard_examples",4);report.put("unknown_team_has_no_logo",ClubCrests.forTeam("desconocido")==null);report.put("opengl_error",error);report.put("game_session_tested",false);
++            String json=new GsonBuilder().setPrettyPrinting().create().toJson(report);Files.write(Paths.get(args[1]),json.getBytes("UTF-8"));System.out.println(json);
++        } finally {Display.destroy();}
++    }
++
++    private static void row(int y,String a,String b,String kitA,String kitB,int scoreA,int scoreB,int colorA,int colorB,int bgA,int bgB) {
++        a=trim(a,70);b=trim(b,70);boolean ca=ClubCrests.forTeam(kitA)!=null,cb=ClubCrests.forTeam(kitB)!=null;
++        ScoreboardLayout l=new ScoreboardLayout(width(a),width(b),ca,cb);
++        GlStateManager.pushMatrix();GlStateManager.translate(12,y,0);GlStateManager.scale(2.1F,2.1F,1);
++        Gui.drawRect(10,8,10+l.width,32,0xFF181B32);Gui.drawRect(l.scoreAX,11,l.scoreAX+28,28,0xFF000000|bgA);Gui.drawRect(l.scoreBX,11,l.scoreBX+28,28,0xFF000000|bgB);
++        text("1st Half",20,16,0xEDEBDA,1);text("23:17",78,12,0xFED600,1);text("45:00",82,22,0xAEAAB0,1);
++        text(a,l.nameAX,16,colorA,1);text(b,l.nameBX,16,colorB,1);
++        String sa=""+scoreA,sb=""+scoreB;text(sa,l.scoreAX+(28-width(sa))/2,15,0xF3F3F3,1);text(sb,l.scoreBX+(28-width(sb))/2,15,0xF3F3F3,1);text("-",l.scoreAX+34,16,0xC3C3CA,1);
++        GlStateManager.enableTexture2D();GlStateManager.color(1,1,1,1);GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);
++        if(ca){GlStateManager.bindTexture(crests.get(kitA));ScoreboardCrests.drawBound(l.iconAX);}if(cb){GlStateManager.bindTexture(crests.get(kitB));ScoreboardCrests.drawBound(l.iconBX);}
++        GlStateManager.popMatrix();
++    }
++    private static int width(String value){int w=0;for(char c:value.toCharArray())w+=widths[c];return w;}
++    private static String trim(String value,int max){while(width(value)>max)value=value.substring(0,value.length()-1);return value;}
++    private static void text(String value,int x,int y,int color,float scale) {
++        GlStateManager.pushMatrix();GlStateManager.translate(x,y,0);GlStateManager.scale(scale,scale,1);
++        GlStateManager.enableTexture2D();GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);GlStateManager.bindTexture(font);
++        GlStateManager.color(((color>>16)&255)/255F,((color>>8)&255)/255F,(color&255)/255F,1);
++        int at=0;for(char ch:value.toCharArray()){float u=(ch%16)/16F,v=(ch/16)/16F;GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2f(u,v);GL11.glVertex2f(at,0);GL11.glTexCoord2f(u,v+1/16F);GL11.glVertex2f(at,8);GL11.glTexCoord2f(u+1/16F,v+1/16F);GL11.glVertex2f(at+8,8);GL11.glTexCoord2f(u+1/16F,v);GL11.glVertex2f(at+8,0);GL11.glEnd();at+=widths[ch];}
++        GlStateManager.popMatrix();GlStateManager.color(1,1,1,1);
++    }
++    private static void projection(int width,int height){GlStateManager.matrixMode(GL11.GL_PROJECTION);GlStateManager.loadIdentity();GL11.glOrtho(0,width,height,0,-1,1);GlStateManager.matrixMode(GL11.GL_MODELVIEW);GlStateManager.loadIdentity();GlStateManager.disableDepth();GlStateManager.disableLighting();GlStateManager.disableCull();GlStateManager.enableTexture2D();GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);}
++    private static void clear(){GL11.glClearColor(0,0,0,0);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);}
++    private static int texture(File path,boolean smooth) throws Exception {
++        BufferedImage im=ImageIO.read(path);ByteBuffer b=BufferUtils.createByteBuffer(im.getWidth()*im.getHeight()*4);
++        for(int y=0;y<im.getHeight();y++)for(int x=0;x<im.getWidth();x++){int p=im.getRGB(x,y);b.put((byte)(p>>16)).put((byte)(p>>8)).put((byte)p).put((byte)(p>>24));}b.flip();int id=GL11.glGenTextures();GlStateManager.bindTexture(id);
++        GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,smooth?GL11.GL_LINEAR:GL11.GL_NEAREST);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,smooth?GL11.GL_LINEAR:GL11.GL_NEAREST);GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA,im.getWidth(),im.getHeight(),0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,b);return id;
++    }
++    private static BufferedImage screenshot(){ByteBuffer b=BufferUtils.createByteBuffer(W*H*4);GL11.glReadPixels(0,0,W,H,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,b);BufferedImage im=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);for(int y=0;y<H;y++)for(int x=0;x<W;x++){int i=((H-1-y)*W+x)*4;im.setRGB(x,y,((b.get(i)&255)<<16)|((b.get(i+1)&255)<<8)|(b.get(i+2)&255));}return im;}
++}
+--- /dev/null
++++ b/src/test/java/net/sports/kit/client/EstudiantesIntegrationTest.java
+@@ -0,0 +1,42 @@
++package net.sports.kit.client;
++
++import java.awt.image.BufferedImage;
++import java.lang.reflect.Method;
++import javax.imageio.ImageIO;
++import net.minecraft.util.ResourceLocation;
++import net.sports.kit.KitRegistrar;
++import net.sports.match.TeamInfo;
++import net.sports.match.TeamRegistry;
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class EstudiantesIntegrationTest {
++    @Test public void newClubIsSelectableAndKeepsAllPreviousKitIndices() {
++        String[] old={"barcelona","realmadrid","arbitro","boca","river"};
++        for(int i=0;i<old.length;i++)assertEquals(i,KitRegistrar.indexOf(old[i]));
++        assertEquals(5,KitRegistrar.indexOf("estudiantes"));assertEquals("Estudiantes de La Plata",KitRegistrar.displayName(5));
++        TeamInfo team=TeamRegistry.find("Estudiantes de La Plata");assertNotNull(team);assertEquals("estudiantes",team.kit);
++        assertSame(team,TeamRegistry.find("ESTUDIANTES"));assertTrue(TeamRegistry.all().contains(team));
++    }
++    @Test public void chestAndScoreboardResolveTheSamePackagedCrest() {
++        ResourceLocation crest=new ResourceLocation("sports","textures/crests/estudiantes.png");
++        assertEquals(crest,ClubCrests.forTeam("estudiantes"));assertEquals(crest,ClubCrests.forTeam("Estudiantes de La Plata"));
++        assertNull(ClubCrests.forTeam("equipo desconocido"));assertNull(ClubCrests.forTeam("arbitro"));assertNull(ClubCrests.forTeam(null));
++    }
++    @Test public void kitResourcesPreserveTheUvAspectAndProvideModelsAndIcons() throws Exception {
++        for(int layer=1;layer<=2;layer++) {
++            BufferedImage image=ImageIO.read(getClass().getResourceAsStream("/assets/sports/textures/models/armor/estudiantes_layer_"+layer+".png"));
++            assertEquals(2*image.getHeight(),image.getWidth());assertEquals(0,image.getRGB(0,0)>>>24);
++        }
++        for(String part:new String[]{"jersey","shorts"}) {
++            assertNotNull(getClass().getResource("/assets/sports/models/item/estudiantes_"+part+".json"));
++            assertNotNull(getClass().getResource("/assets/sports/textures/items/estudiantes_"+part+".png"));
++        }
++    }
++    @Test public void blackDorsalIsPrintedAgainstTheLightBackPanel() throws Exception {
++        Method fill=Dorsales.class.getDeclaredMethod("fillOf",String.class),outline=Dorsales.class.getDeclaredMethod("outlineOf",String.class);
++        fill.setAccessible(true);outline.setAccessible(true);assertEquals(0x111111,fill.invoke(null,"estudiantes"));assertEquals(-1,outline.invoke(null,"estudiantes"));
++        BufferedImage image=ImageIO.read(getClass().getResourceAsStream("/assets/sports/textures/models/armor/estudiantes_layer_1.png"));
++        int pixel=image.getRGB(36*4,27*4);assertTrue(((pixel>>16)&255)>220);assertTrue(((pixel>>8)&255)>220);assertTrue((pixel&255)>220);
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/match/ScoreboardCrestPacketTest.java
+@@ -0,0 +1,40 @@
++package net.sports.match;
++
++import io.netty.buffer.ByteBuf;
++import io.netty.buffer.Unpooled;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.Method;
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class ScoreboardCrestPacketTest {
++    @Test public void selectedKitTravelsIndependentlyOfTheDisplayedTeamName() throws Exception {
++        Constructor<MatchManager> constructor=MatchManager.class.getDeclaredConstructor();constructor.setAccessible(true);
++        MatchManager manager=constructor.newInstance();manager.cfg.teamAId="estudiantes";manager.cfg.teamBId="boca";
++        manager.cfg.teamAName="Mi equipo";manager.cfg.teamBName="Visitante";
++        Method build=MatchManager.class.getDeclaredMethod("buildScoreboard");build.setAccessible(true);
++        MatchNetwork.PacketScoreboard sent=(MatchNetwork.PacketScoreboard)build.invoke(manager);
++        ByteBuf data=Unpooled.buffer();
++        try {
++            sent.toBytes(data);MatchNetwork.PacketScoreboard received=new MatchNetwork.PacketScoreboard();received.fromBytes(data);
++            assertEquals("Mi equipo",received.nameA);assertEquals("estudiantes",received.kitA);
++            assertEquals("Visitante",received.nameB);assertEquals("boca",received.kitB);assertEquals(0,data.readableBytes());
++        } finally {data.release();}
++    }
++    @Test public void olderScoreboardPayloadStillDecodesWithoutCrestFields() {
++        MatchNetwork.PacketScoreboard sent=new MatchNetwork.PacketScoreboard();sent.nameA="Barcelona";sent.nameB="River Plate";sent.scoreA=2;sent.scoreB=1;
++        ByteBuf data=Unpooled.buffer();
++        try {
++            sent.toBytes(data);data.writerIndex(data.writerIndex()-2);
++            MatchNetwork.PacketScoreboard received=new MatchNetwork.PacketScoreboard();received.fromBytes(data);
++            assertEquals("Barcelona",received.nameA);assertEquals(2,received.scoreA);assertEquals(1,received.scoreB);
++            assertEquals("",received.kitA);assertEquals("",received.kitB);
++        } finally {data.release();}
++    }
++    @Test public void missingSelectionsEncodeAsEmptyCrestIds() {
++        MatchNetwork.PacketScoreboard sent=new MatchNetwork.PacketScoreboard();sent.kitA=null;sent.kitB=null;
++        ByteBuf data=Unpooled.buffer();
++        try {sent.toBytes(data);MatchNetwork.PacketScoreboard received=new MatchNetwork.PacketScoreboard();received.fromBytes(data);assertEquals("",received.kitA);assertEquals("",received.kitB);}
++        finally {data.release();}
++    }
++}
+--- /dev/null
++++ b/scripts/GenerateEstudiantesAssets.java
+@@ -0,0 +1,67 @@
++import java.awt.Color;
++import java.awt.Graphics2D;
++import java.awt.Polygon;
++import java.awt.image.BufferedImage;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.Paths;
++import javax.imageio.ImageIO;
++
++/** Creates new pixel assets against the kit's documented 64x32 UV grid. */
++public final class GenerateEstudiantesAssets {
++    private static final int S = 4, RED = 0xFFCE1932, WHITE = 0xFFF5F4F0, BLACK = 0xFF17191E;
++    private static BufferedImage image;
++
++    public static void main(String[] args) throws Exception {
++        Path textures = Paths.get(args[0], "assets/sports/textures");
++        image = new BufferedImage(64*S,32*S,BufferedImage.TYPE_INT_ARGB);
++        stripes(16,20,4,12,.86F);stripes(20,20,8,12,1);stripes(28,20,4,12,.9F);stripes(32,20,8,12,.97F);
++        stripes(20,16,8,4,1);stripes(28,16,8,4,.9F);
++        // A clear panel lets the existing black name and number remain readable.
++        rect(32.15,21.05,7.7,9.6,WHITE);
++        rect(22.8,20,2.4,.5,BLACK);rect(23.2,20.5,1.6,.5,WHITE);rect(23.6,21,.8,.4,WHITE);
++        rect(34.8,20,2.4,.5,RED);
++        for(int face=0;face<4;face++) {
++            stripes(40+face*4,20,4,6,face==1?1:.9F);
++            rect(40+face*4,25.5,4,.5,RED);
++        }
++        stripes(44,16,4,4,1);
++        write(textures.resolve("models/armor/estudiantes_layer_1.png"));
++
++        image = new BufferedImage(64*S,32*S,BufferedImage.TYPE_INT_ARGB);
++        for(int face=0;face<4;face++) {
++            int x=face*4;
++            rect(x,20,4,5,BLACK);rect(x,20,.35,5,RED);
++            rect(x,25,4,5,WHITE);rect(x,25,4,.4,RED);
++            rect(x,30,4,2,BLACK);rect(x,31.7,4,.3,0xFF363940);
++            if(face==1){rect(x+1,30.3,2,.2,0xFFB0B0AE);rect(x+1,30.8,2,.2,0xFFB0B0AE);}
++        }
++        rect(4,16,4,4,BLACK);rect(8,16,4,4,BLACK);
++        rect(16,30,24,2,BLACK);
++        write(textures.resolve("models/armor/estudiantes_layer_2.png"));
++        icon(textures.resolve("items/estudiantes_jersey.png"),true);
++        icon(textures.resolve("items/estudiantes_shorts.png"),false);
++    }
++
++    private static void rect(double x,double y,double w,double h,int color) {
++        Graphics2D g=image.createGraphics();g.setColor(new Color(color,true));
++        g.fillRect((int)Math.round(x*S),(int)Math.round(y*S),(int)Math.round(w*S),(int)Math.round(h*S));g.dispose();
++    }
++    private static void stripes(int x,int y,int w,int h,float shade) {
++        for(int py=0;py<h*S;py++)for(int px=0;px<w*S;px++) {
++            int base=(px+2)%8<4?RED:WHITE;
++            int r=(int)(((base>>16)&255)*shade),g=(int)(((base>>8)&255)*shade),b=(int)((base&255)*shade);
++            image.setRGB(x*S+px,y*S+py,0xFF000000|(r<<16)|(g<<8)|b);
++        }
++    }
++    private static void write(Path target) throws Exception {Files.createDirectories(target.getParent());ImageIO.write(image,"png",target.toFile());}
++    private static void icon(Path target,boolean shirt) throws Exception {
++        image=new BufferedImage(32,32,BufferedImage.TYPE_INT_ARGB);Graphics2D g=image.createGraphics();
++        Polygon shape=shirt?new Polygon(new int[]{10,6,2,6,10,10,22,22,26,30,26,22},new int[]{4,5,12,15,12,28,28,12,15,12,5,4},12)
++            :new Polygon(new int[]{7,25,27,26,18,16,14,6,5},new int[]{5,5,27,28,28,16,28,28,27},9);
++        g.setClip(shape);g.setColor(new Color(shirt?WHITE:BLACK,true));g.fillRect(0,0,32,32);
++        if(shirt){g.setColor(new Color(RED,true));for(int x=3;x<32;x+=5)g.fillRect(x,0,2,32);g.setColor(new Color(BLACK,true));g.fillRect(13,3,6,3);}
++        else{g.setColor(new Color(RED,true));g.fillRect(7,5,1,24);g.fillRect(24,5,1,24);g.setColor(new Color(0xFF414349,true));g.fillRect(7,5,18,2);}
++        g.setClip(null);g.setColor(new Color(0xFF5C141E,true));g.drawPolygon(shape);g.dispose();write(target);
++    }
++}
