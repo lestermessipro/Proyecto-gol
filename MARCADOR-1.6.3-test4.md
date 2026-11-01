@@ -1,5 +1,7 @@
 # Proyecto Gol 1.6.3-test4 — marcador e iconos de Estudiantes
 
+> Sustituida por [TEST5](MARCADOR-1.6.3-test5.md), que conserva este diseño y reduce el tamaño del marcador un 30 %.
+
 Nueva prueba basada en TEST3. Conserva el **pase/regate y las animaciones de 1.6.2**, y cambia el aspecto del marcador y los iconos de inventario de Estudiantes. La oficial sigue siendo 1.6.2.
 
 [Descargar ProyectoGol-1.6.3-test4-marcador.jar](https://github.com/lestermessipro/Proyecto-gol/raw/refs/heads/test-1.6.3-estudiantes/ProyectoGol-1.6.3-test4-marcador.jar)

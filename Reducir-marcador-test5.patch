@@ -1,0 +1,43 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -6,7 +6,7 @@
+     dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+ }
+ apply plugin: 'net.minecraftforge.gradle'
+-version = '1.6.3-test4'
++version = '1.6.3-test5'
+ group = 'net.sports'
+ archivesBaseName = 'ProyectoGol'
+ sourceCompatibility = targetCompatibility = '1.8'
+--- a/src/main/resources/mcmod.info
++++ b/src/main/resources/mcmod.info
+@@ -3,7 +3,7 @@
+     "modid": "sports",
+     "name": "Proyecto Gol",
+     "description": "Mod de futbol de Proyecto Gol: balones, partidos configurables, camisetas y mas. Basado en el Sports Mod original de nico910.",
+-    "version": "1.6.3-test4",
++    "version": "1.6.3-test5",
+     "mcversion": "1.12.2",
+     "url": "",
+     "updateUrl": "",
+--- a/src/main/java/net/sports/SportsMod.java
++++ b/src/main/java/net/sports/SportsMod.java
+@@ -33,7 +33,7 @@
+ import net.sports.network.PacketPipeline;
+ import net.sports.settings.Settings;
+ 
+-@Mod(modid = "sports", name = "sports", version = "1.6.3-test4")
++@Mod(modid = "sports", name = "sports", version = "1.6.3-test5")
+ public class SportsMod {
+    @SidedProxy(clientSide = "net.sports.client.client_Sports", serverSide = "net.sports.common_Sports")
+    public static common_Sports proxy;
+--- a/src/main/java/net/sports/client/gui/ScoreboardLayout.java
++++ b/src/main/java/net/sports/client/gui/ScoreboardLayout.java
+@@ -15,6 +15,6 @@
+     }
+ 
+     public float scaleFor(int scaledScreenWidth) {
+-        return Math.min(1F,Math.max(1,scaledScreenWidth-12F)/(LEFT+width));
++        return Math.min(.70F,Math.max(1,scaledScreenWidth-12F)/(LEFT+width));
+     }
+ }
