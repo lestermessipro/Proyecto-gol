@@ -1,5 +1,7 @@
 # Proyecto Gol 1.6.3-test1 — conducción y recepción
 
+> Esta prueba fue descartada. [TEST3](ESTUDIANTES-1.6.3-test3.md) restaura el pase/regate de 1.6.2 y conserva Estudiantes y los escudos del marcador.
+
 Versión de prueba basada en **1.6.2 oficial** (`8436aa4`). Se publica en la rama `test-1.6.3-control`. La versión oficial y la rama principal siguen en 1.6.2.
 
 [Descargar ProyectoGol-1.6.3-test1-control.jar](https://github.com/lestermessipro/Proyecto-gol/raw/refs/heads/test-1.6.3-control/ProyectoGol-1.6.3-test1-control.jar)

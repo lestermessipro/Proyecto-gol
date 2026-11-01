@@ -1,0 +1,618 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -6,7 +6,7 @@
+     dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+ }
+ apply plugin: 'net.minecraftforge.gradle'
+-version = '1.6.3-test2'
++version = '1.6.3-test3'
+ group = 'net.sports'
+ archivesBaseName = 'ProyectoGol'
+ sourceCompatibility = targetCompatibility = '1.8'
+--- a/src/main/java/net/sports/Anim.java
++++ b/src/main/java/net/sports/Anim.java
+@@ -27,9 +27,7 @@
+    EMOTE_SIU,
+    EMOTE_MESSI,
+    EMOTE_MBAPPE,
+-   EMOTE_RODILLAS,
+-   CONTROL_TOUCH,
+-   CONTROL_RECEIVE;
++   EMOTE_RODILLAS;
+ 
+    private static final Anim[] anims = values();
+ 
+--- a/src/main/java/net/sports/SportsMod.java
++++ b/src/main/java/net/sports/SportsMod.java
+@@ -33,7 +33,7 @@
+ import net.sports.network.PacketPipeline;
+ import net.sports.settings.Settings;
+ 
+-@Mod(modid = "sports", name = "sports", version = "1.6.3-test2")
++@Mod(modid = "sports", name = "sports", version = "1.6.3-test3")
+ public class SportsMod {
+    @SidedProxy(clientSide = "net.sports.client.client_Sports", serverSide = "net.sports.common_Sports")
+    public static common_Sports proxy;
+--- a/src/main/java/net/sports/client/AnimClock.java
++++ b/src/main/java/net/sports/client/AnimClock.java
+@@ -102,10 +102,6 @@
+             var3 = var2 >= 40;
+          } else if (var1 == Anim.PASSE) {
+             var3 = var2 >= 24;
+-         } else if (var1 == Anim.CONTROL_TOUCH) {
+-            var3 = var2 >= 12;
+-         } else if (var1 == Anim.CONTROL_RECEIVE) {
+-            var3 = var2 >= 16;
+          } else if (var1 == Anim.BARRIDA) {
+             var3 = var2 > 52;
+          } else if (var1 == Anim.ESTIRADA) {
+--- a/src/main/java/net/sports/client/animation/FootballActions.java
++++ b/src/main/java/net/sports/client/animation/FootballActions.java
+@@ -6,8 +6,7 @@
+ public final class FootballActions {
+     public enum Kind {
+         NONE(0,-1),SHOT(28,5),CURVE(40,6),PASS(24,5),DRIBBLE(24,4),SLIDE(52,10),DIVE(18,6),CATCH(36,7),
+-        PREPARE_SHOT(0,-1),PREPARE_CURVE(0,-1),PREPARE_PASS(0,-1),HOLD(0,-1),FALL(20,-1),LYING_SHORT(40,-1),LYING_LONG(80,-1),
+-        CONTROL_TOUCH(12,0),CONTROL_RECEIVE(16,0);
++        PREPARE_SHOT(0,-1),PREPARE_CURVE(0,-1),PREPARE_PASS(0,-1),HOLD(0,-1),FALL(20,-1),LYING_SHORT(40,-1),LYING_LONG(80,-1);
+         public final int duration,contact;
+         Kind(int duration,int contact){this.duration=duration;this.contact=contact;}
+     }
+@@ -21,7 +20,6 @@
+         switch(anim) {
+             case TIR:return Kind.SHOT;case CURVE_TIR:return Kind.CURVE;
+             case PASSE:return shortTouch?Kind.DRIBBLE:Kind.PASS;
+-            case CONTROL_TOUCH:return Kind.CONTROL_TOUCH;case CONTROL_RECEIVE:return Kind.CONTROL_RECEIVE;
+             case ARMER_TIR:return Kind.PREPARE_SHOT;case ARMER_CURVE_TIR:return Kind.PREPARE_CURVE;
+             case ARMER_PASSE:return Kind.PREPARE_PASS;
+             case BARRIDA:return Kind.SLIDE;case ESTIRADA:return Kind.DIVE;case ARRET:return Kind.CATCH;
+@@ -37,7 +35,6 @@
+             case CURVE:strike(t,Kind.CURVE,p);break;
+             case PASS:strike(t,Kind.PASS,p);break;
+             case DRIBBLE:dribble(t,p);break;
+-            case CONTROL_TOUCH:case CONTROL_RECEIVE:control(t,kind==Kind.CONTROL_RECEIVE,p);break;
+             case PREPARE_SHOT:case PREPARE_CURVE:case PREPARE_PASS:
+                 strike(0,kind==Kind.PREPARE_SHOT?Kind.SHOT:kind==Kind.PREPARE_CURVE?Kind.CURVE:Kind.PASS,p);
+                 scale(p,smooth(t/6));break;
+@@ -90,21 +87,6 @@
+         p.legYawRight=track(t,0,0,4,.38f,12,.15f,24,0);
+         p.armRollRight=track(t,0,0,4,.13f,24,0);p.armRollLeft=-p.armRollRight;
+         p.elbowRight=p.elbowLeft=-track(t,0,0,4,.25f,24,0);
+-    }
+-
+-    private static void control(float t,boolean receive,FootballGait.Pose p) {
+-        float end=receive?16:12;
+-        p.hipRight=track(t,0,receive?-.20f:-.34f,3,receive?-.12f:-.40f,7,-.10f,end,0);
+-        p.kneeRight=track(t,0,.20f,3,receive?.38f:.16f,7,.24f,end,0);
+-        p.ankleRight=track(t,0,receive?-.24f:.12f,4,receive?-.16f:.18f,end,0);
+-        p.legYawRight=track(t,0,.42f,4,.32f,end,0);
+-        p.hipLeft=track(t,0,-.08f,5,.02f,end,0);
+-        p.kneeLeft=track(t,0,.14f,5,.12f,end,0);
+-        p.ankleLeft=-p.hipLeft-p.kneeLeft;
+-        p.armRollRight=track(t,0,.18f,4,.10f,end,0);p.armRollLeft=-p.armRollRight;
+-        p.elbowRight=p.elbowLeft=-track(t,0,.32f,5,.20f,end,0);
+-        p.twist=track(t,0,.06f,5,.03f,end,0);
+-        p.bounce=FootballGait.soleY(p.hipLeft,p.kneeLeft,p.ankleLeft)-12;
+     }
+     private static void slide(float t,Pose out) {
+         FootballGait.Pose p=out.joints;
+--- a/src/main/java/net/sports/client/animation/RunningStrike.java
++++ b/src/main/java/net/sports/client/animation/RunningStrike.java
+@@ -6,7 +6,7 @@
+ 
+     public static boolean accepts(FootballActions.Kind kind) {
+         switch(kind) {
+-            case SHOT:case CURVE:case PASS:case DRIBBLE:case CONTROL_TOUCH:case CONTROL_RECEIVE:
++            case SHOT:case CURVE:case PASS:case DRIBBLE:
+             case PREPARE_SHOT:case PREPARE_CURVE:case PREPARE_PASS:return true;
+             default:return false;
+         }
+@@ -20,8 +20,6 @@
+             case CURVE:return FootballActions.track(step,0,.40f,4,1,9,1,17,0);
+             case PASS:return FootballActions.track(step,0,.30f,3,1,6,1,12,0);
+             case DRIBBLE:return FootballActions.track(step,0,0,3,.85f,5,.85f,10,0);
+-            case CONTROL_TOUCH:return FootballActions.track(step,0,1,3,.8f,8,0);
+-            case CONTROL_RECEIVE:return FootballActions.track(step,0,1,4,.7f,10,0);
+             default:return 0;
+         }
+     }
+--- a/src/main/java/net/sports/client/gui/Hud.java
++++ b/src/main/java/net/sports/client/gui/Hud.java
+@@ -146,12 +146,7 @@
+             this.sportsman.Cross = Cross;
+             SportsMod.packetPipeline.sendToServer(new PacketKeys(1, Cross));
+             Cross = 0.0F;
+-            if (net.sports.entity.ManualTouch.isControl(this.sportsman.Cross) && !this.playerParameter.inHand) {
+-               // The server confirms the actual contact, including buffered receptions.
+-               this.playerParameter.reset();
+-            } else {
+-               this.sportsman.setAnim(Anim.PASSE);
+-            }
++            this.sportsman.setAnim(Anim.PASSE);
+          }
+ 
+          if (!var4 && !KeyBindings.key_Circle.isKeyDown() && Circle > 0.0F) {
+--- a/src/main/java/net/sports/client/model/ModelSportsman.java
++++ b/src/main/java/net/sports/client/model/ModelSportsman.java
+@@ -140,7 +140,6 @@
+       boolean var35 = var33.anim == Anim.TIR
+          || var33.anim == Anim.CURVE_TIR
+          || var33.anim == Anim.PASSE
+-         || var33.anim == Anim.CONTROL_TOUCH || var33.anim == Anim.CONTROL_RECEIVE
+          || var33.anim == Anim.ARMER_TIR
+          || var33.anim == Anim.ARMER_CURVE_TIR
+          || var33.anim == Anim.ARMER_PASSE;
+@@ -177,8 +176,7 @@
+          || var33.anim == Anim.ARMER_CURVE_TIR
+          || var33.anim == Anim.CURVE_TIR
+          || var33.anim == Anim.ARMER_PASSE
+-         || var33.anim == Anim.PASSE
+-         || var33.anim == Anim.CONTROL_TOUCH || var33.anim == Anim.CONTROL_RECEIVE;
++         || var33.anim == Anim.PASSE;
+       if (var16) {
+          ModelRenderer var43 = var33.leftFoot ? this.modelBiped.bipedLeftLeg : this.modelBiped.bipedRightLeg;
+          ModelRenderer var44 = var33.leftFoot ? this.modelBiped.bipedRightLeg : this.modelBiped.bipedLeftLeg;
+@@ -245,11 +243,6 @@
+                var33.time = 0;
+                var33.reset();
+             }
+-         }
+-         if ((var33.anim == Anim.CONTROL_TOUCH && var33.animTime >= 12)
+-            || (var33.anim == Anim.CONTROL_RECEIVE && var33.animTime >= 16)) {
+-            var33.time = 0;
+-            var33.reset();
+          }
+       }
+ 
+--- a/src/main/java/net/sports/entity/EntitySoccer.java
++++ b/src/main/java/net/sports/entity/EntitySoccer.java
+@@ -9,9 +9,7 @@
+ import net.sports.Sports;
+ import net.sports.SportsMod;
+ import net.sports.SportsSounds;
+-import net.sports.Anim;
+ import net.sports.match.MatchHooks;
+-import net.sports.network.PacketEvent;
+ 
+ public class EntitySoccer extends EntityBall {
+    private static final long SHOT_BODY_ONLY_NANOS = 3000000000L;
+@@ -54,43 +52,16 @@
+       if (!MatchHooks.ballLocked()) {
+          MatchHooks.kicked(this);
+          float var3 = (float)var1 / 40.0F;
+-         boolean control = ManualTouch.isControl((float)var1) && !this.inhand;
+-         ManualTouch.Motion touch = null;
+-         EntityPlayerMP controller = this.sportsmanServer == null ? null : this.sportsmanServer.getPlayer();
+-         if (control && controller != null && controller.onGround
+-            && this.posY - controller.posY >= -.25 && this.posY - controller.posY <= .9) {
+-            touch = ManualTouch.calculate((float)var1, controller.rotationYaw,
+-               this.sportsmanServer.controlMovement.x, this.sportsmanServer.controlMovement.z,
+-               controller.posX - this.posX, controller.posZ - this.posZ,
+-               this.motionX, this.motionY, this.motionZ, this.onGround);
+-         }
+-         if (touch != null) {
+-            this.applyManualTouch(touch);
+-            var3 = (float)Math.hypot(touch.x, touch.z);
+-         } else {
+-            float var4 = MathHelper.clamp(this.rotationPitch, -89.0F, 89.0F);
+-            float var5 = MathHelper.cos(var4 / 180.0F * (float) Math.PI);
+-            this.motionX = -MathHelper.sin(this.rotationYaw / 180.0F * (float) Math.PI) * var5 * var3;
+-            this.motionZ = MathHelper.cos(this.rotationYaw / 180.0F * (float) Math.PI) * var5 * var3;
+-            this.motionY = 0.0;
+-            this.setHeading(this.motionX, this.motionY, this.motionZ, var3, 1.0F);
+-         }
++         float var4 = MathHelper.clamp(this.rotationPitch, -89.0F, 89.0F);
++         float var5 = MathHelper.cos(var4 / 180.0F * (float) Math.PI);
++         this.motionX = -MathHelper.sin(this.rotationYaw / 180.0F * (float) Math.PI) * var5 * var3;
++         this.motionZ = MathHelper.cos(this.rotationYaw / 180.0F * (float) Math.PI) * var5 * var3;
++         this.motionY = 0.0;
++         this.setHeading(this.motionX, this.motionY, this.motionZ, var3, 1.0F);
+          float var6 = MathHelper.clamp(var3 / 0.75F, 0.0F, 1.0F);
+          SportsSounds.playVaried(this.world, this, "sports:pass", 0.3F + 0.4F * var6, 1.08F - 0.12F * var6, 0.05F, 0.04F);
+          this.release();
+-         if (control && controller != null) {
+-            Anim action = touch != null && touch.receiving ? Anim.CONTROL_RECEIVE : Anim.CONTROL_TOUCH;
+-            this.sportsmanServer.animType = action.ordinal();
+-            SportsMod.packetPipeline.sendToAll(new PacketEvent(action.ordinal(), this.sportsmanServer.leftFoot, 0, controller.getEntityId()));
+-         }
+       }
+-   }
+-
+-   void applyManualTouch(ManualTouch.Motion touch) {
+-      this.motionX = touch.x;
+-      this.motionY = touch.y;
+-      this.motionZ = touch.z;
+-      this.velocityChanged = true;
+    }
+ 
+    private void tir(double var1, float var3) {
+--- a/src/main/java/net/sports/entity/EntitySportsmanServer.java
++++ b/src/main/java/net/sports/entity/EntitySportsmanServer.java
+@@ -32,7 +32,6 @@
+    public int powerTicks;
+    public int curveTicks;
+    public int passeCooldown;
+-   public final ManualTouch.Movement controlMovement = new ManualTouch.Movement();
+    public int slidePhase;
+    public int slideTicks;
+    public float slideYaw;
+@@ -64,7 +63,6 @@
+    @Override
+    public void onUpdate() {
+       super.onUpdate();
+-      this.controlMovement.sample(this.player.posX, this.player.posZ, this.player.world.getTotalWorldTime(), this.player.dimension);
+       if (this.passeCooldown > 0) {
+          this.passeCooldown--;
+       }
+--- a/src/main/java/net/sports/entity/ManualTouch.java
++++ /dev/null
+@@ -1,61 +0,0 @@
+-package net.sports.entity;
+-
+-/** Experimental ground touch. One request produces one free-ball impulse. */
+-public final class ManualTouch {
+-    public static final float MAX_CHARGE = 18;
+-    private ManualTouch() {}
+-
+-    public static boolean isControl(float charge) {
+-        return Float.isFinite(charge) && charge > 0 && charge <= MAX_CHARGE;
+-    }
+-
+-    public static Motion calculate(float charge, float yaw, double playerX, double playerZ,
+-                                   double toPlayerX, double toPlayerZ, double ballX, double ballY, double ballZ,
+-                                   boolean ballGrounded) {
+-        if (!isControl(charge) || !Float.isFinite(yaw)) throw new IllegalArgumentException("Invalid manual touch");
+-        double angle = Math.toRadians(yaw), aimX = -Math.sin(angle), aimZ = Math.cos(angle);
+-        double forward = Math.max(0, Math.min(.36, playerX * aimX + playerZ * aimZ));
+-        double amount = charge / MAX_CHARGE;
+-        // The boost fades to zero at the boundary with the original charged pass.
+-        double speed = charge / 40.0 + .6 * forward * (1 - amount * amount);
+-        double dx = ballX - playerX, dz = ballZ - playerZ;
+-        double distance = Math.hypot(toPlayerX, toPlayerZ);
+-        double closing = distance < .15 ? Math.hypot(dx, dz) : (dx * toPlayerX + dz * toPlayerZ) / distance;
+-        boolean receiving = closing > .22;
+-        if (receiving) speed *= .65 + .35 * amount;
+-        double vertical = ballGrounded ? 0 : Math.max(-.08, Math.min(.04, ballY * .18));
+-        return new Motion(aimX * speed, vertical, aimZ * speed, receiving);
+-    }
+-
+-    public static final class Motion {
+-        public final double x, y, z;
+-        public final boolean receiving;
+-        private Motion(double x, double y, double z, boolean receiving) {
+-            this.x = x; this.y = y; this.z = z; this.receiving = receiving;
+-        }
+-    }
+-
+-    /** Server player motion fields do not reliably contain walking speed. */
+-    public static final class Movement {
+-        private boolean initialized;
+-        private double lastX, lastZ;
+-        private long lastTick;
+-        private int dimension;
+-        public double x, z;
+-
+-        public void sample(double positionX, double positionZ, long tick, int dim) {
+-            if (initialized && dim == dimension && tick == lastTick) return;
+-            long dt = tick - lastTick;
+-            double dx = positionX - lastX, dz = positionZ - lastZ;
+-            if (!initialized || dim != dimension || dt <= 0 || dt > 2 || Math.hypot(dx, dz) > 1.25 * dt) {
+-                x = z = 0;
+-            } else {
+-                x = .5 * x + .5 * dx / dt;
+-                z = .5 * z + .5 * dz / dt;
+-                double speed = Math.hypot(x, z);
+-                if (speed > .36) { x *= .36 / speed; z *= .36 / speed; }
+-            }
+-            lastX = positionX; lastZ = positionZ; lastTick = tick; dimension = dim; initialized = true;
+-        }
+-    }
+-}
+--- a/src/main/java/net/sports/network/PacketEvent.java
++++ b/src/main/java/net/sports/network/PacketEvent.java
+@@ -57,11 +57,8 @@
+    public void handleClientSide(EntityPlayer var1) {
+       if (var1 == null || !Anim.isValid(this.event) || !Float.isFinite(this.diveYaw)) return;
+       Entity var2 = var1.world.getEntityByID(this.playerID);
+-      if (var2 != null && (var2 != var1 || Anim.get(this.event) == Anim.CAIDA
+-         || Anim.get(this.event) == Anim.CONTROL_TOUCH || Anim.get(this.event) == Anim.CONTROL_RECEIVE)) {
++      if (var2 != null && (var2 != var1 || Anim.get(this.event) == Anim.CAIDA)) {
+          PlayerParameter var3 = PlayerParameter.getParameter(var2, "EntitySportsman");
+-         if (var2 == var1 && (Anim.get(this.event) == Anim.CONTROL_TOUCH || Anim.get(this.event) == Anim.CONTROL_RECEIVE)
+-            && !acceptsControlFeedback(var3.anim)) return;
+          var3.anim = Anim.get(this.event);
+          var3.time = 0;
+          var3.animTime = 0;
+@@ -70,15 +67,6 @@
+          if (var3.anim == Anim.BARRIDA) {
+             SlideYaw.set(var2, var2.rotationYaw);
+          }
+-      }
+-   }
+-
+-   static boolean acceptsControlFeedback(Anim current) {
+-      if (current == null) return true;
+-      switch (current) {
+-         case INIT: case GLOBAL: case FOOTBALL: case RESET: case ARMER_PASSE: case PASSE:
+-         case CONTROL_TOUCH: case CONTROL_RECEIVE: return true;
+-         default: return false;
+       }
+    }
+ 
+--- a/src/main/java/net/sports/network/PacketKeys.java
++++ b/src/main/java/net/sports/network/PacketKeys.java
+@@ -6,9 +6,6 @@
+ import net.minecraft.entity.player.EntityPlayer;
+ import net.minecraft.entity.player.EntityPlayerMP;
+ import net.sports.entity.EntitySportsmanServer;
+-import net.sports.entity.ManualTouch;
+-import net.sports.Anim;
+-import net.sports.SportsMod;
+ 
+ public class PacketKeys extends AbstractPacket {
+    private int key;
+@@ -52,12 +49,6 @@
+             switch (this.key) {
+                case 1:
+                   var3.Cross = this.value;
+-                  var3.lastCross = 0;
+-                  var3.crossReceive = false;
+-                  if (ManualTouch.isControl(this.value)) {
+-                     var3.animType = Anim.RESET.ordinal();
+-                     SportsMod.packetPipeline.sendToAll(new PacketEvent(Anim.RESET.ordinal(), var3.leftFoot, 0, var2.getEntityId()));
+-                  }
+                   break;
+                case 2:
+                   var3.Circle = this.value;
+--- a/src/main/resources/mcmod.info
++++ b/src/main/resources/mcmod.info
+@@ -3,7 +3,7 @@
+     "modid": "sports",
+     "name": "Proyecto Gol",
+     "description": "Mod de futbol de Proyecto Gol: balones, partidos configurables, camisetas y mas. Basado en el Sports Mod original de nico910.",
+-    "version": "1.6.3-test2",
++    "version": "1.6.3-test3",
+     "mcversion": "1.12.2",
+     "url": "",
+     "updateUrl": "",
+--- a/src/test/java/net/sports/client/animation/ManualControlAnimationTest.java
++++ /dev/null
+@@ -1,33 +0,0 @@
+-package net.sports.client.animation;
+-
+-import net.sports.Anim;
+-import org.junit.Test;
+-import static org.junit.Assert.*;
+-
+-public class ManualControlAnimationTest {
+-    @Test public void confirmedContactsStartAtContactAndResolveForBothPlayersAndFeet() {
+-        assertEquals(FootballActions.Kind.CONTROL_TOUCH,FootballActions.resolve(Anim.CONTROL_TOUCH,false));
+-        assertEquals(FootballActions.Kind.CONTROL_RECEIVE,FootballActions.resolve(Anim.CONTROL_RECEIVE,true));
+-        for(FootballActions.Kind kind:new FootballActions.Kind[]{FootballActions.Kind.CONTROL_TOUCH,FootballActions.Kind.CONTROL_RECEIVE}) {
+-            assertEquals(0,kind.contact);FootballActions.Pose p=new FootballActions.Pose();FootballActions.sample(kind,0,false,p);
+-            assertTrue(p.joints.hipRight<-.15);assertTrue(p.joints.legYawRight>.3);
+-            FootballActions.sample(kind,kind.duration,false,p);assertEquals(0,p.joints.hipRight,0);
+-        }
+-    }
+-    @Test public void controlRecoveryKeepsTheUninvolvedLegSteppingAndResumesTheFullStride() {
+-        FootballActions.Pose action=new FootballActions.Pose();FootballGait.Pose gait=new FootballGait.Pose(),out=new FootballGait.Pose();
+-        for(FootballActions.Kind kind:new FootballActions.Kind[]{FootballActions.Kind.CONTROL_TOUCH,FootballActions.Kind.CONTROL_RECEIVE})for(boolean left:new boolean[]{false,true}) {
+-            for(int phase=0;phase<32;phase++) {
+-                FootballGait.sample(phase*.2F,1,true,gait);FootballActions.sample(kind,0,left,action);
+-                RunningStrike.compose(kind,0,left,1,gait,action.joints,out);
+-                assertEquals(left?gait.hipRight:gait.hipLeft,left?out.hipRight:out.hipLeft,1e-6);
+-                FootballActions.sample(kind,11,left,action);RunningStrike.compose(kind,11,left,1,gait,action.joints,out);
+-                assertEquals(gait.hipRight,out.hipRight,1e-6);assertEquals(gait.hipLeft,out.hipLeft,1e-6);
+-            }
+-        }
+-    }
+-    @Test public void originalNetworkAnimationIdsStayInPlace() {
+-        assertEquals(5,Anim.PASSE.ordinal());assertEquals(26,Anim.EMOTE_RODILLAS.ordinal());
+-        assertEquals(27,Anim.CONTROL_TOUCH.ordinal());assertEquals(28,Anim.CONTROL_RECEIVE.ordinal());
+-    }
+-}
+--- a/src/test/java/net/sports/entity/ManualTouchPhysicsTest.java
++++ /dev/null
+@@ -1,59 +0,0 @@
+-package net.sports.entity;
+-
+-import java.util.Collections;
+-import java.util.List;
+-import javax.annotation.Nullable;
+-import net.minecraft.block.state.IBlockState;
+-import net.minecraft.entity.Entity;
+-import net.minecraft.entity.player.EntityPlayer;
+-import net.minecraft.init.Blocks;
+-import net.minecraft.init.Bootstrap;
+-import net.minecraft.nbt.NBTTagCompound;
+-import net.minecraft.profiler.Profiler;
+-import net.minecraft.util.SoundCategory;
+-import net.minecraft.util.SoundEvent;
+-import net.minecraft.util.math.AxisAlignedBB;
+-import net.minecraft.util.math.BlockPos;
+-import net.minecraft.world.World;
+-import net.minecraft.world.WorldProviderSurface;
+-import net.minecraft.world.chunk.IChunkProvider;
+-import net.minecraft.world.storage.SaveHandlerMP;
+-import net.minecraft.world.storage.WorldInfo;
+-import org.junit.BeforeClass;
+-import org.junit.Test;
+-import static org.junit.Assert.*;
+-
+-public class ManualTouchPhysicsTest {
+-    @BeforeClass public static void registries(){Bootstrap.register();}
+-    @Test public void actualBallRollsWithALowerBounceThanTheOriginalPass() {
+-        EntitySoccer old=ball(),control=ball();old.setHeading(0,0,1,.3F,0);
+-        control.applyManualTouch(ManualTouch.calculate(12,0,0,0,0,-.5,0,0,0,true));
+-        double oldHeight=0,newHeight=0;
+-        for(int i=0;i<20;i++){
+-            old.onUpdateServer();control.onUpdateServer();oldHeight=Math.max(oldHeight,old.posY);newHeight=Math.max(newHeight,control.posY);
+-        }
+-        assertTrue("old pass must exercise the hop",oldHeight>.3);
+-        assertTrue("control must stay close to the grass",newHeight<.1);
+-        assertTrue(control.posZ>1);assertFalse(control.inhand);assertTrue(control.velocityChanged);
+-    }
+-    @Test public void movementProducesMoreTravelAndTheFreeBallEventuallySlowsDown() {
+-        EntitySoccer walk=ball(),sprint=ball();
+-        walk.applyManualTouch(ManualTouch.calculate(12,0,0,.2,0,-.5,0,0,.2,true));
+-        sprint.applyManualTouch(ManualTouch.calculate(12,0,0,.3,0,-.5,0,0,.3,true));
+-        for(int i=0;i<10;i++){walk.onUpdateServer();sprint.onUpdateServer();}
+-        assertTrue(sprint.posZ>walk.posZ);double earlySpeed=sprint.motionZ;
+-        for(int i=0;i<100;i++)sprint.onUpdateServer();
+-        assertTrue(sprint.motionZ<earlySpeed*.1);assertFalse(sprint.inhand);
+-    }
+-    static EntitySoccer ball(){EntitySoccer ball=new EntitySoccer(new Pitch());ball.setPosition(0,0,0);ball.onGround=true;return ball;}
+-    static final class Pitch extends World {
+-        private final AxisAlignedBB floor=new AxisAlignedBB(-100,-1,-100,100,0,100);
+-        Pitch(){super(new SaveHandlerMP(),new WorldInfo(new NBTTagCompound()),new WorldProviderSurface(),new Profiler(),false);}
+-        @Override protected IChunkProvider createChunkProvider(){return null;}
+-        @Override protected boolean isChunkLoaded(int x,int z,boolean empty){return false;}
+-        @Override public IBlockState getBlockState(BlockPos pos){return (pos.getY()<0?Blocks.GRASS:Blocks.AIR).getDefaultState();}
+-        @Override public List<AxisAlignedBB> getCollisionBoxes(@Nullable Entity entity,AxisAlignedBB box){return floor.intersects(box)?Collections.singletonList(floor):Collections.emptyList();}
+-        @Override public List<Entity> getEntitiesWithinAABBExcludingEntity(@Nullable Entity entity,AxisAlignedBB box){return Collections.emptyList();}
+-        @Override public void playSound(@Nullable EntityPlayer player,double x,double y,double z,SoundEvent sound,SoundCategory category,float volume,float pitch){}
+-    }
+-}
+--- a/src/test/java/net/sports/entity/ManualTouchReview.java
++++ /dev/null
+@@ -1,52 +0,0 @@
+-package net.sports.entity;
+-
+-import com.google.gson.GsonBuilder;
+-import java.nio.file.Files;
+-import java.nio.file.Paths;
+-import java.util.ArrayList;
+-import java.util.LinkedHashMap;
+-import java.util.List;
+-import java.util.Map;
+-import net.minecraft.init.Bootstrap;
+-
+-/** Repeatable real-ball physics comparison on the test grass pitch. No game or network session. */
+-public final class ManualTouchReview {
+-    public static void main(String[] args) throws Exception {
+-        Bootstrap.register();verifyClock();List<Map<String,Object>> scenarios=new ArrayList<>();
+-        scenarios.add(compare("toque_en_parado",6,0,0));
+-        scenarios.add(compare("conduccion_carrera",12,.2,.2));
+-        scenarios.add(compare("conduccion_sprint",12,.3,.3));
+-        scenarios.add(compare("recepcion_frontal",6,0,-1.2));
+-        Map<String,Object> report=new LinkedHashMap<>();report.put("version","1.6.3-test1");
+-        report.put("method","EntitySoccer server physics, grass floor, one manual request, original heading without random spread for comparison");
+-        report.put("game_or_network_session_tested",false);report.put("scenarios",scenarios);
+-        report.put("control_animations_reset_without_model_render",true);
+-        String json=new GsonBuilder().setPrettyPrinting().create().toJson(report);Files.write(Paths.get(args[0]),json.getBytes("UTF-8"));System.out.println(json);
+-    }
+-    private static void verifyClock() throws Exception {
+-        java.lang.reflect.Method finish=net.sports.client.AnimClock.class.getDeclaredMethod("finish",net.sports.client.entity.PlayerParameter.class);
+-        finish.setAccessible(true);
+-        for(net.sports.Anim action:new net.sports.Anim[]{net.sports.Anim.CONTROL_TOUCH,net.sports.Anim.CONTROL_RECEIVE}) {
+-            net.sports.client.entity.PlayerParameter parameter=new net.sports.client.entity.PlayerParameter();
+-            parameter.anim=action;parameter.animTime=net.sports.client.animation.FootballActions.resolve(action,false).duration-1;finish.invoke(null,parameter);
+-            if(parameter.anim!=action)throw new AssertionError("Premature animation reset");
+-            parameter.animTime++;finish.invoke(null,parameter);
+-            if(parameter.anim!=net.sports.Anim.RESET)throw new AssertionError("Stale animation without model render");
+-        }
+-    }
+-    private static Map<String,Object> compare(String name,float charge,double playerSpeed,double incoming) {
+-        EntitySoccer before=ManualTouchPhysicsTest.ball(),after=ManualTouchPhysicsTest.ball();
+-        before.setHeading(0,0,1,charge/40,0);
+-        ManualTouch.Motion motion=ManualTouch.calculate(charge,0,0,playerSpeed,0,-.5,0,0,incoming,true);
+-        after.applyManualTouch(motion);
+-        Map<String,Object> row=new LinkedHashMap<>();row.put("scenario",name);row.put("charge",charge);row.put("player_blocks_per_tick",playerSpeed);
+-        row.put("incoming_blocks_per_tick",incoming);row.put("reception",motion.receiving);row.put("old_initial_speed",charge/40.0);row.put("test_initial_speed",Math.hypot(motion.x,motion.z));
+-        double oldHeight=0,newHeight=0;
+-        for(int tick=1;tick<=120;tick++) {
+-            before.onUpdateServer();after.onUpdateServer();oldHeight=Math.max(oldHeight,before.posY);newHeight=Math.max(newHeight,after.posY);
+-            if(tick==10){row.put("old_distance_10_ticks",before.posZ);row.put("test_distance_10_ticks",after.posZ);}
+-        }
+-        row.put("old_max_height",oldHeight);row.put("test_max_height",newHeight);row.put("test_speed_120_ticks",Math.hypot(after.motionX,after.motionZ));
+-        return row;
+-    }
+-}
+--- a/src/test/java/net/sports/entity/ManualTouchTest.java
++++ /dev/null
+@@ -1,68 +0,0 @@
+-package net.sports.entity;
+-
+-import org.junit.Test;
+-import static org.junit.Assert.*;
+-
+-public class ManualTouchTest {
+-    private ManualTouch.Motion touch(float power,double movement,double incoming) {
+-        return ManualTouch.calculate(power,0,0,movement,0,-.5,0,incoming<0?-.4:0,incoming,true);
+-    }
+-    @Test public void groundControlHasNoRandomSpreadOrAddedHop() {
+-        for(int yaw=-180;yaw<=180;yaw+=15) {
+-            ManualTouch.Motion a=ManualTouch.calculate(12,yaw,0,0,0,-.5,0,0,0,true);
+-            assertEquals(-Math.sin(Math.toRadians(yaw))*.3,a.x,1e-10);
+-            assertEquals(Math.cos(Math.toRadians(yaw))*.3,a.z,1e-10);
+-            assertEquals(0,a.y,0);assertFalse(a.receiving);
+-        }
+-    }
+-    @Test public void incomingBallIsCushionedButAnOutgoingBallIsNotAReception() {
+-        ManualTouch.Motion receiving=touch(6,0,-1.2),dribble=touch(6,0,.2);
+-        assertTrue(receiving.receiving);assertFalse(dribble.receiving);
+-        assertTrue(receiving.z>0&&receiving.z<dribble.z);
+-        assertTrue(receiving.z<.2);assertEquals(0,receiving.y,0);
+-    }
+-    @Test public void movementGivesALongerTouchWithoutChangingAim() {
+-        double standing=touch(12,0,0).z,walking=touch(12,.2,.2).z,sprinting=touch(12,.3,.3).z;
+-        assertTrue(standing<walking);assertTrue(walking<sprinting);assertTrue(sprinting<.45);
+-        assertEquals(standing,touch(12,-.2,0).z,1e-10);
+-        ManualTouch.Motion sideways=ManualTouch.calculate(12,0,.3,0,0,-.5,0,0,0,true);
+-        assertEquals(0,sideways.x,0);assertEquals(standing,sideways.z,1e-10);
+-    }
+-    @Test public void increasingChargeIsContinuousAndMeetsTheOriginalPassAtTheBoundary() {
+-        for(double movement:new double[]{0,.2,.3,.36}) {
+-            double previous=0;
+-            for(int i=1;i<=180;i++) {
+-                double speed=touch(i/10F,movement,movement).z;
+-                assertTrue(speed>=previous-1e-7);assertTrue(speed<=.450001);previous=speed;
+-            }
+-            assertEquals(18/40.0,previous,1e-9);
+-        }
+-        assertFalse(ManualTouch.isControl(18.01F));assertFalse(ManualTouch.isControl(30));
+-    }
+-    @Test public void descendingReceptionReducesTheBounceWithoutLiftingAGroundedBall() {
+-        ManualTouch.Motion falling=ManualTouch.calculate(6,0,0,0,0,-.5,0,-1.5,-1,false);
+-        ManualTouch.Motion rising=ManualTouch.calculate(6,0,0,0,0,-.5,0,1.5,-1,false);
+-        assertEquals(-.08,falling.y,0);assertEquals(.04,rising.y,0);
+-    }
+-    @Test public void invalidAndChargedInputsCannotEnterTheShortControlPath() {
+-        for(float value:new float[]{0,-1,19,Float.NaN,Float.POSITIVE_INFINITY}) {
+-            assertFalse(ManualTouch.isControl(value));
+-            try{touch(value,0,0);fail("must reject invalid control");}catch(IllegalArgumentException expected){}
+-        }
+-    }
+-    @Test public void movementSamplerTracksServerPositionsAndIgnoresDuplicateTicks() {
+-        ManualTouch.Movement m=new ManualTouch.Movement();
+-        for(int i=0;i<=20;i++)m.sample(0,i*.3,i,0);
+-        assertEquals(.3,m.z,.000001);assertEquals(0,m.x,0);
+-        double speed=m.z;m.sample(0,100,20,0);assertEquals(speed,m.z,0);
+-        m.sample(0,6.3,21,0);assertEquals(.3,m.z,.000001);
+-    }
+-    @Test public void teleportDimensionChangeAndLongGapsDoNotCreateAPowerBoost() {
+-        ManualTouch.Movement m=new ManualTouch.Movement();m.sample(0,0,0,0);m.sample(0,.3,1,0);
+-        m.sample(0,100,2,0);assertEquals(0,m.z,0);
+-        m.sample(0,100.3,3,1);assertEquals(0,m.z,0);
+-        m.sample(0,100.6,20,1);assertEquals(0,m.z,0);
+-        for(int i=21;i<30;i++)m.sample(i,101+i, i,1);
+-        assertTrue(Math.hypot(m.x,m.z)<=.360001);
+-    }
+-}
+--- a/src/test/java/net/sports/network/ControlFeedbackTest.java
++++ /dev/null
+@@ -1,14 +0,0 @@
+-package net.sports.network;
+-
+-import net.sports.Anim;
+-import org.junit.Test;
+-import static org.junit.Assert.*;
+-
+-public class ControlFeedbackTest {
+-    @Test public void actualContactCanReplaceIdlePreparationAndPreviousControl() {
+-        for(Anim anim:new Anim[]{null,Anim.RESET,Anim.ARMER_PASSE,Anim.CONTROL_TOUCH,Anim.CONTROL_RECEIVE})assertTrue(PacketEvent.acceptsControlFeedback(anim));
+-    }
+-    @Test public void lateControlFeedbackCannotCancelANewerShotTackleOrGoalkeeperAction() {
+-        for(Anim anim:new Anim[]{Anim.TIR,Anim.CURVE_TIR,Anim.ARMER_TIR,Anim.BARRIDA,Anim.ESTIRADA,Anim.CAIDA,Anim.PISO_CORTO,Anim.ARRET,Anim.EMOTE_SIU})assertFalse(PacketEvent.acceptsControlFeedback(anim));
+-    }
+-}

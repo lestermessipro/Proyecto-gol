@@ -1,5 +1,7 @@
 # Proyecto Gol 1.6.3-test2 — escudos en el marcador y Estudiantes
 
+> Sustituida por [TEST3](ESTUDIANTES-1.6.3-test3.md), que conserva este uniforme y marcador y restaura el pase/regate de 1.6.2.
+
 Nueva prueba basada en **1.6.3-test1 de conducción y recepción** (`4072f86`). Se publica en la rama `test-1.6.3-estudiantes`; la oficial continúa siendo **1.6.2** y no se modifica su rama principal.
 
 [Descargar ProyectoGol-1.6.3-test2-estudiantes.jar](https://github.com/lestermessipro/Proyecto-gol/raw/refs/heads/test-1.6.3-estudiantes/ProyectoGol-1.6.3-test2-estudiantes.jar)
