@@ -1,5 +1,7 @@
 # Proyecto Gol 1.6.3-test3 — pase/regate restaurado
 
+> Sustituida por [TEST4](MARCADOR-1.6.3-test4.md): mantiene este pase/regate y actualiza el marcador y los iconos de inventario de Estudiantes.
+
 Esta versión **revierte los cambios de conducción, recepción y animaciones introducidos en 1.6.3-test1**. El pase/regate vuelve al comportamiento de **1.6.2 oficial**.
 
 [Descargar ProyectoGol-1.6.3-test3-estudiantes.jar](https://github.com/lestermessipro/Proyecto-gol/raw/refs/heads/test-1.6.3-estudiantes/ProyectoGol-1.6.3-test3-estudiantes.jar)

@@ -1,0 +1,39 @@
+{
+  "version": "1.6.3-test4",
+  "previous_test_commit": "75ca2d9",
+  "jar_sha256": "0562c0fb54cdf1c5a63eccec5d235f541e8c7afe05ba18357610c4d39fcb7e6c",
+  "jar_bytes": 1363281,
+  "junit": {
+    "tests": 125,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classic_gameplay_classes_identical_to_1_6_2": 17,
+  "wearable_kit_classes_unchanged": true,
+  "previous_pngs_unchanged": 41,
+  "inventory_sprites": {
+    "jersey": {
+      "width": 16,
+      "height": 16,
+      "classic_silhouette_matches": true,
+      "binary_alpha": true
+    },
+    "shorts": {
+      "width": 16,
+      "height": 16,
+      "classic_silhouette_matches": true,
+      "binary_alpha": true
+    }
+  },
+  "old_scoreboard_crest_renderer_absent": true,
+  "opengl_review": {
+    "club_background_checks": 5,
+    "scoreboard_examples": 4,
+    "production_renderer_used": true,
+    "crest_images_used": false,
+    "opengl_error": 0,
+    "game_session_tested": false
+  },
+  "game_session_tested": false
+}

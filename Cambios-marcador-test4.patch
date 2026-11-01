@@ -1,0 +1,714 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -6,7 +6,7 @@
+     dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+ }
+ apply plugin: 'net.minecraftforge.gradle'
+-version = '1.6.3-test3'
++version = '1.6.3-test4'
+ group = 'net.sports'
+ archivesBaseName = 'ProyectoGol'
+ sourceCompatibility = targetCompatibility = '1.8'
+--- a/scripts/GenerateEstudiantesAssets.java
++++ b/scripts/GenerateEstudiantesAssets.java
+@@ -1,6 +1,5 @@
+ import java.awt.Color;
+ import java.awt.Graphics2D;
+-import java.awt.Polygon;
+ import java.awt.image.BufferedImage;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+@@ -39,8 +38,7 @@
+         rect(4,16,4,4,BLACK);rect(8,16,4,4,BLACK);
+         rect(16,30,24,2,BLACK);
+         write(textures.resolve("models/armor/estudiantes_layer_2.png"));
+-        icon(textures.resolve("items/estudiantes_jersey.png"),true);
+-        icon(textures.resolve("items/estudiantes_shorts.png"),false);
++        // Inventory icons are exported separately on the shared 16x16 item grid.
+     }
+ 
+     private static void rect(double x,double y,double w,double h,int color) {
+@@ -55,13 +53,4 @@
+         }
+     }
+     private static void write(Path target) throws Exception {Files.createDirectories(target.getParent());ImageIO.write(image,"png",target.toFile());}
+-    private static void icon(Path target,boolean shirt) throws Exception {
+-        image=new BufferedImage(32,32,BufferedImage.TYPE_INT_ARGB);Graphics2D g=image.createGraphics();
+-        Polygon shape=shirt?new Polygon(new int[]{10,6,2,6,10,10,22,22,26,30,26,22},new int[]{4,5,12,15,12,28,28,12,15,12,5,4},12)
+-            :new Polygon(new int[]{7,25,27,26,18,16,14,6,5},new int[]{5,5,27,28,28,16,28,28,27},9);
+-        g.setClip(shape);g.setColor(new Color(shirt?WHITE:BLACK,true));g.fillRect(0,0,32,32);
+-        if(shirt){g.setColor(new Color(RED,true));for(int x=3;x<32;x+=5)g.fillRect(x,0,2,32);g.setColor(new Color(BLACK,true));g.fillRect(13,3,6,3);}
+-        else{g.setColor(new Color(RED,true));g.fillRect(7,5,1,24);g.fillRect(24,5,1,24);g.setColor(new Color(0xFF414349,true));g.fillRect(7,5,18,2);}
+-        g.setClip(null);g.setColor(new Color(0xFF5C141E,true));g.drawPolygon(shape);g.dispose();write(target);
+-    }
+ }
+--- a/src/main/java/net/sports/SportsMod.java
++++ b/src/main/java/net/sports/SportsMod.java
+@@ -33,7 +33,7 @@
+ import net.sports.network.PacketPipeline;
+ import net.sports.settings.Settings;
+ 
+-@Mod(modid = "sports", name = "sports", version = "1.6.3-test3")
++@Mod(modid = "sports", name = "sports", version = "1.6.3-test4")
+ public class SportsMod {
+    @SidedProxy(clientSide = "net.sports.client.client_Sports", serverSide = "net.sports.common_Sports")
+    public static common_Sports proxy;
+--- a/src/main/java/net/sports/client/gui/Hud.java
++++ b/src/main/java/net/sports/client/gui/Hud.java
+@@ -5,7 +5,6 @@
+ import java.util.Random;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.entity.EntityPlayerSP;
+-import net.minecraft.client.gui.FontRenderer;
+ import net.minecraft.client.gui.Gui;
+ import net.minecraft.client.gui.GuiIngame;
+ import net.minecraft.client.gui.ScaledResolution;
+@@ -15,7 +14,6 @@
+ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+ import net.minecraft.util.SoundEvent;
+ import net.minecraft.util.Timer;
+-import net.minecraft.util.ResourceLocation;
+ import net.minecraft.util.math.MathHelper;
+ import net.sports.Anim;
+ import net.sports.SportsMod;
+@@ -30,7 +28,6 @@
+ import net.sports.entity.EntityBall;
+ import net.sports.match.client.MatchClient;
+ import net.sports.network.PacketKeys;
+-import net.sports.kit.client.ClubCrests;
+ import org.lwjgl.opengl.GL11;
+ 
+ public class Hud {
+@@ -41,6 +38,11 @@
+    PlayerParameter playerParameter;
+    ScaledResolution var3;
+    private ScoreboardLayout scoreLayout;
++   private ScoreboardStyle scoreStyleA, scoreStyleB;
++   private final BroadcastScoreboard.Font scoreboardFont = new BroadcastScoreboard.Font() {
++      public int width(String value) { return mc.fontRenderer.getStringWidth(value); }
++      public void draw(String value,int x,int y,int color) { mc.fontRenderer.drawString(value,x,y,color); }
++   };
+    float pow;
+    int inc = 0;
+    int fullTicks = -1;
+@@ -302,6 +304,7 @@
+    }
+ 
+    public void resetSession() {
++      this.scoreLayout = null;this.scoreStyleA = this.scoreStyleB = null;
+       this.playerSP = null;this.sportsman = null;this.playerParameter = null;
+       Cross = Circle = this.pow = 0;curveToggle = false;
+       this.fullTicks = -1;this.goldFlash = this.inc = this.time = 0;
+@@ -357,36 +360,24 @@
+ 
+    private void drawScoreboard() {
+       if (!MatchClient.sbVisible) return;
+-      FontRenderer font = this.mc.fontRenderer;
+-      String nameA = font.trimStringToWidth(MatchClient.sbNameA == null ? "" : MatchClient.sbNameA, 70);
+-      String nameB = font.trimStringToWidth(MatchClient.sbNameB == null ? "" : MatchClient.sbNameB, 70);
+-      ResourceLocation crestA = ClubCrests.forTeam(MatchClient.sbKitA.isEmpty() ? MatchClient.sbNameA : MatchClient.sbKitA);
+-      ResourceLocation crestB = ClubCrests.forTeam(MatchClient.sbKitB.isEmpty() ? MatchClient.sbNameB : MatchClient.sbKitB);
+-      int widthA = font.getStringWidth(nameA), widthB = font.getStringWidth(nameB);
+-      if (scoreLayout == null || scoreLayout.nameWidthA != widthA || scoreLayout.nameWidthB != widthB
+-         || scoreLayout.crestA != (crestA != null) || scoreLayout.crestB != (crestB != null)) {
+-         scoreLayout = new ScoreboardLayout(widthA, widthB, crestA != null, crestB != null);
++      if (scoreStyleA == null || !scoreStyleA.matches(MatchClient.sbKitA,MatchClient.sbNameA,MatchClient.sbColorA,MatchClient.sbBoxA)) {
++         scoreStyleA = ScoreboardStyle.of(MatchClient.sbKitA,MatchClient.sbNameA,MatchClient.sbColorA,MatchClient.sbBoxA);
++      }
++      if (scoreStyleB == null || !scoreStyleB.matches(MatchClient.sbKitB,MatchClient.sbNameB,MatchClient.sbColorB,MatchClient.sbBoxB)) {
++         scoreStyleB = ScoreboardStyle.of(MatchClient.sbKitB,MatchClient.sbNameB,MatchClient.sbColorB,MatchClient.sbBoxB);
++      }
++      String score = MatchClient.sbScoreA + " - " + MatchClient.sbScoreB;
++      int scoreWidth = scoreboardFont.width(score);
++      if (scoreLayout == null || scoreLayout.scoreTextWidth != scoreWidth) {
++         scoreLayout = new ScoreboardLayout(scoreWidth);
+       }
+       ScoreboardLayout layout = scoreLayout;
+-      int x = ScoreboardLayout.LEFT, y = ScoreboardLayout.TOP, scoreY = y + 3;
+       GlStateManager.pushMatrix();
+       try {
+          float scale = layout.scaleFor(this.var3.getScaledWidth());
+          GlStateManager.scale(scale, scale, 1);
+-         Gui.drawRect(x, y, x + layout.width, y + 24, -15197134);
+-         Gui.drawRect(x, y + 23, x + layout.width, y + 24, -14012603);
+-         Gui.drawRect(layout.scoreAX, scoreY, layout.scoreAX + 28, scoreY + 17, MatchClient.sbBoxA);
+-         Gui.drawRect(layout.scoreBX, scoreY, layout.scoreBX + 28, scoreY + 17, MatchClient.sbBoxB);
+-         font.drawStringWithShadow(MatchClient.sbPeriod, x + 10, y + 8, -1185046);
+-         font.drawStringWithShadow(MatchClient.sbClock, x + 68, y + 4, MatchClient.sbPaused ? -43691 : -76288);
+-         font.drawStringWithShadow(MatchClient.sbTotal, x + 72, y + 14, -5331040);
+-         font.drawStringWithShadow(nameA, layout.nameAX, y + 8, MatchClient.sbColorA);
+-         font.drawStringWithShadow(nameB, layout.nameBX, y + 8, MatchClient.sbColorB);
+-         String scoreA = String.valueOf(MatchClient.sbScoreA), scoreB = String.valueOf(MatchClient.sbScoreB);
+-         font.drawStringWithShadow(scoreA, layout.scoreAX + (28 - font.getStringWidth(scoreA)) / 2, scoreY + 4, -855307);
+-         font.drawStringWithShadow(scoreB, layout.scoreBX + (28 - font.getStringWidth(scoreB)) / 2, scoreY + 4, -855307);
+-         font.drawStringWithShadow("-", layout.scoreAX + 28 + (16 - font.getStringWidth("-")) / 2, y + 8, -6643538);
+-         ScoreboardCrests.render(crestA, crestB, layout);
++         BroadcastScoreboard.draw(layout,scoreStyleA,scoreStyleB,score,MatchClient.sbPeriod,MatchClient.sbClock,
++            MatchClient.sbTotal,MatchClient.sbPaused,scoreboardFont);
+       } finally {
+          GlStateManager.popMatrix();
+          GlStateManager.color(1, 1, 1, 1);
+--- a/src/main/java/net/sports/client/gui/ScoreboardCrests.java
++++ /dev/null
+@@ -1,43 +0,0 @@
+-package net.sports.client.gui;
+-
+-import net.minecraft.client.Minecraft;
+-import net.minecraft.client.gui.Gui;
+-import net.minecraft.client.renderer.GlStateManager;
+-import net.minecraft.util.ResourceLocation;
+-import org.lwjgl.opengl.GL11;
+-import org.lwjgl.opengl.GL14;
+-
+-public final class ScoreboardCrests {
+-    private ScoreboardCrests() {}
+-
+-    public static void render(ResourceLocation a, ResourceLocation b, ScoreboardLayout layout) {
+-        if (a == null && b == null) return;
+-        int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+-        boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
+-        int src = GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB), dst = GL11.glGetInteger(GL14.GL_BLEND_DST_RGB);
+-        int srcA = GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA), dstA = GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA);
+-        try {
+-            GlStateManager.color(1, 1, 1, 1);
+-            GlStateManager.enableBlend();
+-            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+-            draw(a, layout.iconAX); draw(b, layout.iconBX);
+-        } finally {
+-            GlStateManager.bindTexture(texture);
+-            GlStateManager.tryBlendFuncSeparate(src, dst, srcA, dstA);
+-            if (!blend) GlStateManager.disableBlend();
+-        }
+-    }
+-
+-    private static void draw(ResourceLocation crest, int x) {
+-        if (crest == null) return;
+-        Minecraft.getMinecraft().getTextureManager().bindTexture(crest);
+-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+-        drawBound(x);
+-    }
+-
+-    static void drawBound(int x) {
+-        Gui.drawModalRectWithCustomSizedTexture(x, ScoreboardLayout.TOP + 3, 0, 0,
+-            ScoreboardLayout.ICON, ScoreboardLayout.ICON, ScoreboardLayout.ICON, ScoreboardLayout.ICON);
+-    }
+-}
+--- a/src/main/java/net/sports/client/gui/ScoreboardLayout.java
++++ b/src/main/java/net/sports/client/gui/ScoreboardLayout.java
+@@ -1,25 +1,20 @@
+ package net.sports.client.gui;
+ 
+-/** Logical HUD coordinates before the existing compact scoreboard scaling. */
++/** Three adjoining broadcast panels: team, score, team. */
+ public final class ScoreboardLayout {
+-    public static final int LEFT = 10, TOP = 8, HEIGHT = 24, ICON = 18;
+-    public final int nameWidthA, nameWidthB;
+-    public final boolean crestA, crestB;
+-    public final int iconAX, iconBX, nameAX, nameBX, scoreAX, scoreBX, width;
++    public static final int LEFT=8, TOP=8, HEIGHT=26, TEAM_WIDTH=54;
++    public static final float LABEL_SCALE=2, SCORE_SCALE=2;
++    public final int scoreTextWidth, centerWidth, centerX, awayX, width;
+ 
+-    public ScoreboardLayout(int widthA, int widthB, boolean crestA, boolean crestB) {
+-        this.nameWidthA = Math.max(0, widthA); this.nameWidthB = Math.max(0, widthB);
+-        this.crestA = crestA; this.crestB = crestB;
+-        this.iconAX = LEFT + 118;
+-        this.nameAX = iconAX + (crestA ? ICON + 4 : 0);
+-        this.scoreAX = nameAX + nameWidthA + 10;
+-        this.scoreBX = scoreAX + 28 + 16;
+-        this.iconBX = scoreBX + 28 + 8;
+-        this.nameBX = iconBX + (crestB ? ICON + 4 : 0);
+-        this.width = nameBX + nameWidthB + 12 - LEFT;
++    public ScoreboardLayout(int scoreTextWidth) {
++        this.scoreTextWidth=Math.max(0,scoreTextWidth);
++        this.centerWidth=Math.max(72,(int)Math.ceil(this.scoreTextWidth*SCORE_SCALE)+16);
++        this.centerX=LEFT+TEAM_WIDTH;
++        this.awayX=centerX+centerWidth;
++        this.width=TEAM_WIDTH*2+centerWidth;
+     }
+ 
+     public float scaleFor(int scaledScreenWidth) {
+-        return Math.min(.65F, Math.max(1, scaledScreenWidth - 12F) / (LEFT + width));
++        return Math.min(1F,Math.max(1,scaledScreenWidth-12F)/(LEFT+width));
+     }
+ }
+--- a/src/main/java/net/sports/kit/client/ClubCrests.java
++++ b/src/main/java/net/sports/kit/client/ClubCrests.java
+@@ -36,7 +36,7 @@
+ 
+     private ClubCrests() {}
+ 
+-    /** The same packaged image is shared by shirts and the match scoreboard. */
++    /** Resolve a club's shirt crest by its registered identity. */
+     public static ResourceLocation forTeam(String idOrName) {
+         TeamInfo team = TeamRegistry.find(idOrName);
+         int index = KitRegistrar.indexOf(team == null ? idOrName : team.kit);
+--- a/src/main/resources/mcmod.info
++++ b/src/main/resources/mcmod.info
+@@ -3,7 +3,7 @@
+     "modid": "sports",
+     "name": "Proyecto Gol",
+     "description": "Mod de futbol de Proyecto Gol: balones, partidos configurables, camisetas y mas. Basado en el Sports Mod original de nico910.",
+-    "version": "1.6.3-test3",
++    "version": "1.6.3-test4",
+     "mcversion": "1.12.2",
+     "url": "",
+     "updateUrl": "",
+--- a/src/test/java/net/sports/client/gui/ScoreboardLayoutTest.java
++++ b/src/test/java/net/sports/client/gui/ScoreboardLayoutTest.java
+@@ -4,22 +4,23 @@
+ import static org.junit.Assert.*;
+ 
+ public class ScoreboardLayoutTest {
+-    @Test public void crestSlotsNeverOverlapNamesOrScores() {
+-        for(boolean a:new boolean[]{false,true})for(boolean b:new boolean[]{false,true}) {
+-            ScoreboardLayout l=new ScoreboardLayout(70,70,a,b);
+-            assertTrue(l.nameAX>=l.iconAX+(a?18:0));assertTrue(l.scoreAX>l.nameAX+70);
+-            assertTrue(l.scoreBX>l.scoreAX+28);assertTrue(l.nameBX>=l.iconBX+(b?18:0));
+-            assertTrue(l.nameBX+70<ScoreboardLayout.LEFT+l.width);
++    @Test public void threePanelsAdjoinAndReserveSpaceForLargeScores() {
++        for(int textWidth:new int[]{23,35,47,120}) {
++            ScoreboardLayout l=new ScoreboardLayout(textWidth);
++            assertEquals(ScoreboardLayout.LEFT+ScoreboardLayout.TEAM_WIDTH,l.centerX);
++            assertEquals(l.centerX+l.centerWidth,l.awayX);
++            assertEquals(l.awayX+ScoreboardLayout.TEAM_WIDTH,ScoreboardLayout.LEFT+l.width);
++            assertTrue(l.centerWidth>=textWidth*ScoreboardLayout.SCORE_SCALE+16);
+         }
+     }
+-    @Test public void unknownTeamsUseTheOriginalCompactWidthWithoutEmptyLogoBoxes() {
+-        ScoreboardLayout plain=new ScoreboardLayout(45,50,false,false),logos=new ScoreboardLayout(45,50,true,true);
+-        assertEquals(44,logos.width-plain.width);assertEquals(128,plain.nameAX);
++    @Test public void normalFootballScoresHaveStablePanelSizes() {
++        ScoreboardLayout zero=new ScoreboardLayout(23),four=new ScoreboardLayout(25);
++        assertEquals(72,zero.centerWidth);assertEquals(zero.width,four.width);assertEquals(180,zero.width);
+     }
+     @Test public void fullScoreboardFitsSmallAndLargeGuiWidths() {
+-        ScoreboardLayout l=new ScoreboardLayout(70,70,true,true);
+-        for(int width:new int[]{200,256,320,480,640}) {
+-            float scale=l.scaleFor(width);assertTrue(scale>0&&scale<=.65F);
++        for(int scoreWidth:new int[]{23,120})for(int width:new int[]{160,200,256,320,480,640}) {
++            ScoreboardLayout l=new ScoreboardLayout(scoreWidth);
++            float scale=l.scaleFor(width);assertTrue(scale>0&&scale<=1F);
+             assertTrue((ScoreboardLayout.LEFT+l.width)*scale<=width-11.99);
+         }
+     }
+--- a/src/test/java/net/sports/client/gui/ScoreboardReview.java
++++ /dev/null
+@@ -1,87 +0,0 @@
+-package net.sports.client.gui;
+-
+-import com.google.gson.GsonBuilder;
+-import java.awt.image.BufferedImage;
+-import java.io.File;
+-import java.nio.ByteBuffer;
+-import java.nio.file.Files;
+-import java.nio.file.Paths;
+-import java.util.LinkedHashMap;
+-import java.util.Map;
+-import javax.imageio.ImageIO;
+-import net.minecraft.client.gui.Gui;
+-import net.minecraft.client.renderer.GlStateManager;
+-import net.minecraft.client.renderer.OpenGlHelper;
+-import net.sports.kit.client.ClubCrests;
+-import org.lwjgl.BufferUtils;
+-import org.lwjgl.opengl.Display;
+-import org.lwjgl.opengl.DisplayMode;
+-import org.lwjgl.opengl.GL11;
+-import org.lwjgl.opengl.GL13;
+-
+-/** Standalone layout review using the real logo quad and Minecraft's bitmap font. */
+-public final class ScoreboardReview {
+-    private static final int W=1200,H=520;
+-    private static final Map<String,Integer> crests=new LinkedHashMap<>();
+-    private static int font;
+-    private static final int[] widths=new int[256];
+-
+-    public static void main(String[] args) throws Exception {
+-        Display.setDisplayMode(new DisplayMode(W,H));Display.create();
+-        OpenGlHelper.defaultTexUnit=GL13.GL_TEXTURE0;OpenGlHelper.lightmapTexUnit=GL13.GL_TEXTURE1;
+-        try {
+-            for(String team:new String[]{"barcelona","realmadrid","boca","river","estudiantes"})crests.put(team,texture(new File("src/main/resources/assets/sports/textures/crests/"+team+".png"),true));
+-            BufferedImage ascii=ImageIO.read(new File(args[2]));font=texture(new File(args[2]),false);
+-            for(int ch=0;ch<256;ch++){int last=7;while(last>=0){boolean ink=false;for(int y=0;y<8;y++)if((ascii.getRGB((ch%16)*8+last,(ch/16)*8+y)>>>24)>16){ink=true;break;}if(ink)break;last--;}widths[ch]=ch==32?4:last+2;}
+-            int checks=0;
+-            for(int tex:crests.values()) {
+-                GL11.glViewport(0,0,256,256);projection(64,64);clear();GlStateManager.bindTexture(tex);ScoreboardCrests.drawBound(10);
+-                ByteBuffer pixels=BufferUtils.createByteBuffer(256*256*4);GL11.glReadPixels(0,0,256,256,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
+-                int changed=0;
+-                for(int y=0;y<256;y++)for(int x=0;x<256;x++){int i=((255-y)*256+x)*4;if((pixels.get(i)&255)+(pixels.get(i+1)&255)+(pixels.get(i+2)&255)>0){changed++;if(x<40||x>=112||y<44||y>=116)throw new AssertionError("Logo escaped its slot");}}
+-                if(changed<100)throw new AssertionError("Missing logo");checks++;
+-            }
+-            GL11.glViewport(0,0,W,H);projection(W,H);clear();
+-            text("PROYECTO GOL - ESCUDOS EN EL MARCADOR",24,22,0xEDF4FA,2);
+-            row(85,"Barcelona","Real Madrid","barcelona","realmadrid",2,1,0xFFE11D,0xEEEEEE,0x9A1431,0x1D3164);
+-            row(185,"Estudiantes","Boca Juniors","estudiantes","boca",1,0,0xFFFFFF,0xFFD433,0xB91D32,0x174177);
+-            row(285,"River Plate","Estudiantes","river","estudiantes",0,0,0xFFFFFF,0xFFFFFF,0xA81730,0xB91D32);
+-            row(385,"Local","Visitante","desconocido","",0,0,0xDDDDDD,0xDDDDDD,0x444466,0x443333);
+-            text("Revision OpenGL de la distribucion y los escudos; no es una captura de una partida.",24,490,0x9BAEBF,1.5F);
+-            BufferedImage result=screenshot();ImageIO.write(result,"png",new File(args[0]));
+-            int error=GL11.glGetError();if(error!=0)throw new AssertionError("OpenGL error "+error);
+-            Map<String,Object> report=new LinkedHashMap<>();report.put("crest_slot_image_checks",checks);report.put("scoreboard_examples",4);report.put("unknown_team_has_no_logo",ClubCrests.forTeam("desconocido")==null);report.put("opengl_error",error);report.put("game_session_tested",false);
+-            String json=new GsonBuilder().setPrettyPrinting().create().toJson(report);Files.write(Paths.get(args[1]),json.getBytes("UTF-8"));System.out.println(json);
+-        } finally {Display.destroy();}
+-    }
+-
+-    private static void row(int y,String a,String b,String kitA,String kitB,int scoreA,int scoreB,int colorA,int colorB,int bgA,int bgB) {
+-        a=trim(a,70);b=trim(b,70);boolean ca=ClubCrests.forTeam(kitA)!=null,cb=ClubCrests.forTeam(kitB)!=null;
+-        ScoreboardLayout l=new ScoreboardLayout(width(a),width(b),ca,cb);
+-        GlStateManager.pushMatrix();GlStateManager.translate(12,y,0);GlStateManager.scale(2.1F,2.1F,1);
+-        Gui.drawRect(10,8,10+l.width,32,0xFF181B32);Gui.drawRect(l.scoreAX,11,l.scoreAX+28,28,0xFF000000|bgA);Gui.drawRect(l.scoreBX,11,l.scoreBX+28,28,0xFF000000|bgB);
+-        text("1st Half",20,16,0xEDEBDA,1);text("23:17",78,12,0xFED600,1);text("45:00",82,22,0xAEAAB0,1);
+-        text(a,l.nameAX,16,colorA,1);text(b,l.nameBX,16,colorB,1);
+-        String sa=""+scoreA,sb=""+scoreB;text(sa,l.scoreAX+(28-width(sa))/2,15,0xF3F3F3,1);text(sb,l.scoreBX+(28-width(sb))/2,15,0xF3F3F3,1);text("-",l.scoreAX+34,16,0xC3C3CA,1);
+-        GlStateManager.enableTexture2D();GlStateManager.color(1,1,1,1);GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);
+-        if(ca){GlStateManager.bindTexture(crests.get(kitA));ScoreboardCrests.drawBound(l.iconAX);}if(cb){GlStateManager.bindTexture(crests.get(kitB));ScoreboardCrests.drawBound(l.iconBX);}
+-        GlStateManager.popMatrix();
+-    }
+-    private static int width(String value){int w=0;for(char c:value.toCharArray())w+=widths[c];return w;}
+-    private static String trim(String value,int max){while(width(value)>max)value=value.substring(0,value.length()-1);return value;}
+-    private static void text(String value,int x,int y,int color,float scale) {
+-        GlStateManager.pushMatrix();GlStateManager.translate(x,y,0);GlStateManager.scale(scale,scale,1);
+-        GlStateManager.enableTexture2D();GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);GlStateManager.bindTexture(font);
+-        GlStateManager.color(((color>>16)&255)/255F,((color>>8)&255)/255F,(color&255)/255F,1);
+-        int at=0;for(char ch:value.toCharArray()){float u=(ch%16)/16F,v=(ch/16)/16F;GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2f(u,v);GL11.glVertex2f(at,0);GL11.glTexCoord2f(u,v+1/16F);GL11.glVertex2f(at,8);GL11.glTexCoord2f(u+1/16F,v+1/16F);GL11.glVertex2f(at+8,8);GL11.glTexCoord2f(u+1/16F,v);GL11.glVertex2f(at+8,0);GL11.glEnd();at+=widths[ch];}
+-        GlStateManager.popMatrix();GlStateManager.color(1,1,1,1);
+-    }
+-    private static void projection(int width,int height){GlStateManager.matrixMode(GL11.GL_PROJECTION);GlStateManager.loadIdentity();GL11.glOrtho(0,width,height,0,-1,1);GlStateManager.matrixMode(GL11.GL_MODELVIEW);GlStateManager.loadIdentity();GlStateManager.disableDepth();GlStateManager.disableLighting();GlStateManager.disableCull();GlStateManager.enableTexture2D();GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);}
+-    private static void clear(){GL11.glClearColor(0,0,0,0);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);}
+-    private static int texture(File path,boolean smooth) throws Exception {
+-        BufferedImage im=ImageIO.read(path);ByteBuffer b=BufferUtils.createByteBuffer(im.getWidth()*im.getHeight()*4);
+-        for(int y=0;y<im.getHeight();y++)for(int x=0;x<im.getWidth();x++){int p=im.getRGB(x,y);b.put((byte)(p>>16)).put((byte)(p>>8)).put((byte)p).put((byte)(p>>24));}b.flip();int id=GL11.glGenTextures();GlStateManager.bindTexture(id);
+-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,smooth?GL11.GL_LINEAR:GL11.GL_NEAREST);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,smooth?GL11.GL_LINEAR:GL11.GL_NEAREST);GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA,im.getWidth(),im.getHeight(),0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,b);return id;
+-    }
+-    private static BufferedImage screenshot(){ByteBuffer b=BufferUtils.createByteBuffer(W*H*4);GL11.glReadPixels(0,0,W,H,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,b);BufferedImage im=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);for(int y=0;y<H;y++)for(int x=0;x<W;x++){int i=((H-1-y)*W+x)*4;im.setRGB(x,y,((b.get(i)&255)<<16)|((b.get(i+1)&255)<<8)|(b.get(i+2)&255));}return im;}
+-}
+--- a/src/test/java/net/sports/kit/client/EstudiantesIntegrationTest.java
++++ b/src/test/java/net/sports/kit/client/EstudiantesIntegrationTest.java
+@@ -39,4 +39,15 @@
+         BufferedImage image=ImageIO.read(getClass().getResourceAsStream("/assets/sports/textures/models/armor/estudiantes_layer_1.png"));
+         int pixel=image.getRGB(36*4,27*4);assertTrue(((pixel>>16)&255)>220);assertTrue(((pixel>>8)&255)>220);assertTrue((pixel&255)>220);
+     }
++    @Test public void inventorySpritesShareTheOriginalKitGridAndSilhouette() throws Exception {
++        for(String part:new String[]{"jersey","shorts"}) {
++            BufferedImage sprite=ImageIO.read(getClass().getResourceAsStream("/assets/sports/textures/items/estudiantes_"+part+".png"));
++            BufferedImage reference=ImageIO.read(getClass().getResourceAsStream("/assets/sports/textures/items/river_"+part+".png"));
++            assertEquals(16,sprite.getWidth());assertEquals(16,sprite.getHeight());
++            for(int y=0;y<16;y++)for(int x=0;x<16;x++) {
++                int alpha=sprite.getRGB(x,y)>>>24;assertTrue(alpha==0||alpha==255);
++                assertEquals("inventory outline at "+x+","+y,(reference.getRGB(x,y)>>>24)>127,alpha>127);
++            }
++        }
++    }
+ }
+--- /dev/null
++++ b/scripts/ExportInventorySprite.java
+@@ -0,0 +1,23 @@
++import java.awt.AlphaComposite;
++import java.awt.Graphics2D;
++import java.awt.RenderingHints;
++import java.awt.image.BufferedImage;
++import java.io.File;
++import javax.imageio.ImageIO;
++
++/** Pixel-grid export: nearest-neighbor size conversion and optional binary alpha. */
++public final class ExportInventorySprite {
++    public static void main(String[] args) throws Exception {
++        BufferedImage input=ImageIO.read(new File(args[0]));int size=Integer.parseInt(args[2]);
++        BufferedImage output=new BufferedImage(size,size,BufferedImage.TYPE_INT_ARGB);
++        Graphics2D graphics=output.createGraphics();graphics.setComposite(AlphaComposite.Src);
++        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
++        graphics.drawImage(input,0,0,size,size,null);graphics.dispose();
++        if(args.length>3&&args[3].equals("--binary-alpha")) {
++            for(int y=0;y<size;y++)for(int x=0;x<size;x++) {
++                int pixel=output.getRGB(x,y);output.setRGB(x,y,(pixel>>>24)<128?0:pixel|0xFF000000);
++            }
++        }
++        ImageIO.write(output,"png",new File(args[1]));
++    }
++}
+--- /dev/null
++++ b/src/main/java/net/sports/client/gui/BroadcastScoreboard.java
+@@ -0,0 +1,73 @@
++package net.sports.client.gui;
++
++import net.minecraft.client.gui.Gui;
++import net.minecraft.client.renderer.BufferBuilder;
++import net.minecraft.client.renderer.GlStateManager;
++import net.minecraft.client.renderer.Tessellator;
++import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
++
++public final class BroadcastScoreboard {
++    public interface Font {
++        int width(String value);
++        void draw(String value,int x,int y,int color);
++    }
++    private BroadcastScoreboard() {}
++
++    public static void draw(ScoreboardLayout layout,ScoreboardStyle a,ScoreboardStyle b,String score,
++                            String period,String clock,String total,boolean paused,Font font) {
++        int x=ScoreboardLayout.LEFT,y=ScoreboardLayout.TOP,h=ScoreboardLayout.HEIGHT;
++        Gui.drawRect(x-1,y-1,x+layout.width+1,y+h+1,0xE0141414);
++        panel(a,x,y);panel(b,layout.awayX,y);
++        Gui.drawRect(layout.centerX,y,layout.awayX,y+h,0xFFF6F4EF);
++        Gui.drawRect(layout.centerX,y,layout.centerX+1,y+h,0xFFDDDAD2);
++        Gui.drawRect(layout.awayX-1,y,layout.awayX,y+h,0xFFDDDAD2);
++        label(font,a.abbreviation,x,ScoreboardLayout.TEAM_WIDTH,y,a.text,a.outline,ScoreboardLayout.LABEL_SCALE,true);
++        label(font,b.abbreviation,layout.awayX,ScoreboardLayout.TEAM_WIDTH,y,b.text,b.outline,ScoreboardLayout.LABEL_SCALE,true);
++        label(font,score,layout.centerX,layout.centerWidth,y,0x111111,0,ScoreboardLayout.SCORE_SCALE,false);
++        String status=(period==null?"":period)+"  "+(clock==null?"":clock)+(total==null||total.isEmpty()?"":" / "+total);
++        Gui.drawRect(x,y+h+3,x+layout.width,y+h+14,0xC0141418);
++        float small=Math.min(.8F,(layout.width-8F)/Math.max(1,font.width(status)));
++        GlStateManager.pushMatrix();
++        try {
++            GlStateManager.translate(x+(layout.width-font.width(status)*small)/2F,y+h+5,0);
++            GlStateManager.scale(small,small,1);font.draw(status,0,0,paused?0xFF8585:0xF4F1E7);
++        } finally {GlStateManager.popMatrix();GlStateManager.color(1,1,1,1);}
++    }
++
++    static void panel(ScoreboardStyle style,int x,int y) {
++        int w=ScoreboardLayout.TEAM_WIDTH,h=ScoreboardLayout.HEIGHT;
++        Gui.drawRect(x,y,x+w,y+h,0xFF000000|style.base);
++        switch(style.pattern) {
++            case HORIZONTAL:Gui.drawRect(x,y+9,x+w,y+18,0xFF000000|style.accent);break;
++            case VERTICAL:
++                for(int i=0;i<6;i++)if(i%2==1)Gui.drawRect(x+i*w/6,y,x+(i+1)*w/6,y+h,0xFF000000|style.accent);
++                break;
++            case DIAGONAL:
++                GlStateManager.disableTexture2D();
++                GlStateManager.color(((style.accent>>16)&255)/255F,((style.accent>>8)&255)/255F,(style.accent&255)/255F,1);
++                Tessellator tess=Tessellator.getInstance();BufferBuilder buffer=tess.getBuffer();buffer.begin(7,DefaultVertexFormats.POSITION);
++                buffer.pos(x+6,y,0).endVertex();buffer.pos(x+32,y+h,0).endVertex();
++                buffer.pos(x+42,y+h,0).endVertex();buffer.pos(x+16,y,0).endVertex();tess.draw();
++                GlStateManager.enableTexture2D();GlStateManager.color(1,1,1,1);break;
++            case GOLD_TRIM:
++                Gui.drawRect(x,y+h-4,x+w,y+h-1,0xFF000000|style.accent);
++                Gui.drawRect(x,y+h-1,x+w,y+h,0xFF49377D);break;
++            default:Gui.drawRect(x,y+h-2,x+w,y+h,0xFF000000|style.accent);
++        }
++    }
++
++    private static void label(Font font,String value,int x,int width,int y,int color,int outline,float scale,boolean border) {
++        GlStateManager.pushMatrix();
++        try {
++            GlStateManager.translate(x+(width-font.width(value)*scale)/2F,y+(ScoreboardLayout.HEIGHT-8*scale)/2F,0);
++            GlStateManager.scale(scale,scale,1);
++            if(border) {
++                GlStateManager.pushMatrix();GlStateManager.translate(-.5F,0,0);font.draw(value,0,0,outline);GlStateManager.popMatrix();
++                GlStateManager.pushMatrix();GlStateManager.translate(.5F,0,0);font.draw(value,0,0,outline);GlStateManager.popMatrix();
++                GlStateManager.pushMatrix();GlStateManager.translate(0,-.5F,0);font.draw(value,0,0,outline);GlStateManager.popMatrix();
++                GlStateManager.pushMatrix();GlStateManager.translate(0,.5F,0);font.draw(value,0,0,outline);GlStateManager.popMatrix();
++            }
++            font.draw(value,0,0,color);
++        } finally {GlStateManager.popMatrix();GlStateManager.color(1,1,1,1);}
++    }
++}
+--- /dev/null
++++ b/src/main/java/net/sports/client/gui/ScoreboardStyle.java
+@@ -0,0 +1,52 @@
++package net.sports.client.gui;
++
++import java.text.Normalizer;
++import java.util.Locale;
++import net.sports.match.TeamInfo;
++import net.sports.match.TeamRegistry;
++
++/** Club shirt colors, independent of crest images. */
++public final class ScoreboardStyle {
++    public enum Pattern { PLAIN, HORIZONTAL, DIAGONAL, VERTICAL, GOLD_TRIM }
++    public final String abbreviation;
++    public final int base, accent, text, outline;
++    public final Pattern pattern;
++    private final String kit, name;
++    private final int primary, secondary;
++
++    private ScoreboardStyle(String kit,String name,int primary,int secondary,String abbreviation,int base,int accent,int text,Pattern pattern) {
++        this.kit=kit;this.name=name;this.primary=primary;this.secondary=secondary;
++        this.abbreviation=abbreviation;this.base=base;this.accent=accent;this.text=text;
++        this.outline=text==0xFFFFFF?0x141414:0xFFFFFF;this.pattern=pattern;
++    }
++
++    public boolean matches(String kit,String name,int primary,int secondary) {
++        return this.kit.equals(safe(kit))&&this.name.equals(safe(name))&&this.primary==primary&&this.secondary==secondary;
++    }
++
++    public static ScoreboardStyle of(String kit,String name,int primary,int secondary) {
++        kit=safe(kit);name=safe(name);
++        TeamInfo team=TeamRegistry.find(kit.isEmpty()?name:kit);
++        String id=team==null?"":team.kit;
++        String code;int base,accent,text;Pattern pattern;
++        switch(id) {
++            case "boca":code="BOC";base=0x123D8E;accent=0xFFD339;text=0xFFFFFF;pattern=Pattern.HORIZONTAL;break;
++            case "river":code="RIV";base=0xF7F5F1;accent=0xD51935;text=0x111111;pattern=Pattern.DIAGONAL;break;
++            case "barcelona":code="BAR";base=0x124E93;accent=0xA31442;text=0xFFFFFF;pattern=Pattern.VERTICAL;break;
++            case "realmadrid":code="RMA";base=0xF7F5F1;accent=0xD9B756;text=0x111111;pattern=Pattern.GOLD_TRIM;break;
++            case "estudiantes":code="EST";base=0xF7F5F1;accent=0xCA2036;text=0x111111;pattern=Pattern.VERTICAL;break;
++            default:
++                code=shortName(name);base=secondary&0xFFFFFF;accent=primary&0xFFFFFF;
++                int brightness=((base>>16)&255)*299+((base>>8)&255)*587+(base&255)*114;
++                text=brightness>145000?0x111111:0xFFFFFF;pattern=Pattern.PLAIN;
++        }
++        return new ScoreboardStyle(kit,name,primary,secondary,code,base,accent,text,pattern);
++    }
++
++    private static String shortName(String name) {
++        String clean=Normalizer.normalize(name.replaceAll("§.",""),Normalizer.Form.NFD)
++            .replaceAll("\\p{M}+","").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]","");
++        return clean.isEmpty()?"---":clean.substring(0,Math.min(3,clean.length()));
++    }
++    private static String safe(String value){return value==null?"":value;}
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/gui/BroadcastScoreboardReview.java
+@@ -0,0 +1,117 @@
++package net.sports.client.gui;
++
++import com.google.gson.GsonBuilder;
++import java.awt.image.BufferedImage;
++import java.io.File;
++import java.nio.ByteBuffer;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import javax.imageio.ImageIO;
++import net.minecraft.client.renderer.GlStateManager;
++import net.minecraft.client.renderer.OpenGlHelper;
++import org.lwjgl.BufferUtils;
++import org.lwjgl.opengl.Display;
++import org.lwjgl.opengl.DisplayMode;
++import org.lwjgl.opengl.GL11;
++import org.lwjgl.opengl.GL13;
++
++/** Renders the production scoreboard with Minecraft's bitmap font, without a game session. */
++public final class BroadcastScoreboardReview {
++    private static final int W=1060,H=720;
++    private static BitmapFont font;
++
++    public static void main(String[] args) throws Exception {
++        Display.setDisplayMode(new DisplayMode(W,H));Display.create();
++        OpenGlHelper.defaultTexUnit=GL13.GL_TEXTURE0;OpenGlHelper.lightmapTexUnit=GL13.GL_TEXTURE1;
++        try {
++            font=new BitmapFont(new File(args[2]));
++            int patternChecks=0;
++            for(String team:new String[]{"boca","river","barcelona","realmadrid","estudiantes"}) {
++                GL11.glViewport(0,0,256,256);projection(64,64);GL11.glClearColor(0,0,0,0);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
++                ScoreboardStyle style=ScoreboardStyle.of(team,"",0,0);BroadcastScoreboard.panel(style,0,0);
++                ByteBuffer pixels=BufferUtils.createByteBuffer(256*256*4);GL11.glReadPixels(0,0,256,256,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
++                int changed=0;
++                for(int y=0;y<256;y++)for(int x=0;x<256;x++) {
++                    int i=((255-y)*256+x)*4;
++                    if((pixels.get(i)&255)+(pixels.get(i+1)&255)+(pixels.get(i+2)&255)>0) {
++                        changed++;if(x>=54*4||y>=26*4)throw new AssertionError("Team background escaped its panel");
++                    }
++                }
++                if(changed<54*26*12)throw new AssertionError("Missing background");
++                if(team.equals("boca")&&rgb(pixels,4*4,12*4)!=style.accent)throw new AssertionError("Boca band missing");
++                if(team.equals("river")&&rgb(pixels,24*4,13*4)!=style.accent)throw new AssertionError("River diagonal missing");
++                patternChecks++;
++            }
++            GL11.glViewport(0,0,W,H);projection(W,H);clear();
++            title("PROYECTO GOL - NUEVO MARCADOR",24,16);
++            row(45,"boca","river","1 - 4",false);
++            row(205,"barcelona","realmadrid","2 - 1",false);
++            row(365,"estudiantes","boca","0 - 0",true);
++            row(525,"local","visitante","3 - 2",false);
++            inventory();
++            font.draw("Revision OpenGL del marcador real; no es una captura de una partida.",24,702,0x9BAEBF);
++            ImageIO.write(screenshot(),"png",new File(args[0]));
++            int error=GL11.glGetError();if(error!=0)throw new AssertionError("OpenGL error "+error);
++            Map<String,Object> report=new LinkedHashMap<>();report.put("club_background_checks",patternChecks);report.put("scoreboard_examples",4);
++            report.put("production_renderer_used",true);report.put("crest_images_used",false);report.put("opengl_error",error);report.put("game_session_tested",false);
++            String json=new GsonBuilder().setPrettyPrinting().create().toJson(report);Files.write(Paths.get(args[1]),json.getBytes("UTF-8"));System.out.println(json);
++        } finally {Display.destroy();}
++    }
++
++    private static void row(int y,String a,String b,String score,boolean paused) {
++        ScoreboardStyle sa=ScoreboardStyle.of(a,a,0xFFF0D060,0xFF384F69),sb=ScoreboardStyle.of(b,b,0xFFF0D060,0xFF663C3F);
++        ScoreboardLayout layout=new ScoreboardLayout(font.width(score));
++        GlStateManager.pushMatrix();GlStateManager.translate(24,y,0);GlStateManager.scale(3.2F,3.2F,1);
++        int stack=GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH);
++        BroadcastScoreboard.draw(layout,sa,sb,score,"1st Half","23:17","45:00",paused,font);
++        if(GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH)!=stack)throw new AssertionError("Matrix stack leaked");
++        GlStateManager.popMatrix();
++    }
++    private static void inventory() throws Exception {
++        font.draw("ESTUDIANTES",740,90,0xEDF4FA);font.draw("ICONOS DE INVENTARIO",740,110,0xAEBECE);
++        for(int i=0;i<2;i++) {
++            int x=740+i*110,y=142;
++            net.minecraft.client.gui.Gui.drawRect(x-2,y-2,x+82,y+82,0xFF555A60);
++            net.minecraft.client.gui.Gui.drawRect(x,y,x+80,y+80,0xFF23282E);
++            String part=i==0?"jersey":"shorts";
++            BufferedImage im=ImageIO.read(new File("src/main/resources/assets/sports/textures/items/estudiantes_"+part+".png"));
++            ByteBuffer bytes=BufferUtils.createByteBuffer(16*16*4);
++            for(int py=0;py<16;py++)for(int px=0;px<16;px++){int p=im.getRGB(px,py);bytes.put((byte)(p>>16)).put((byte)(p>>8)).put((byte)p).put((byte)(p>>24));}
++            bytes.flip();int texture=GL11.glGenTextures();GlStateManager.bindTexture(texture);
++            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_NEAREST);
++            GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA,16,16,0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,bytes);
++            GlStateManager.color(1,1,1,1);GlStateManager.enableTexture2D();GlStateManager.enableBlend();
++            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);
++            net.minecraft.client.gui.Gui.drawModalRectWithCustomSizedTexture(x+8,y+8,0,0,64,64,64,64);
++        }
++        font.draw("16 x 16",740,240,0xAEBECE);
++    }
++    private static int rgb(ByteBuffer p,int x,int y){int i=((255-y)*256+x)*4;return ((p.get(i)&255)<<16)|((p.get(i+1)&255)<<8)|(p.get(i+2)&255);}
++    private static void title(String text,int x,int y){GlStateManager.pushMatrix();GlStateManager.translate(x,y,0);GlStateManager.scale(2,2,1);font.draw(text,0,0,0xEDF4FA);GlStateManager.popMatrix();}
++    private static void projection(int width,int height){GlStateManager.matrixMode(GL11.GL_PROJECTION);GlStateManager.loadIdentity();GL11.glOrtho(0,width,height,0,-1,1);GlStateManager.matrixMode(GL11.GL_MODELVIEW);GlStateManager.loadIdentity();GlStateManager.disableDepth();GlStateManager.disableLighting();GlStateManager.disableCull();GlStateManager.enableTexture2D();GlStateManager.enableBlend();GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);}
++    private static void clear(){GL11.glClearColor(.035F,.045F,.055F,1);GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);}
++    private static BufferedImage screenshot(){ByteBuffer b=BufferUtils.createByteBuffer(W*H*4);GL11.glReadPixels(0,0,W,H,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,b);BufferedImage im=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);for(int y=0;y<H;y++)for(int x=0;x<W;x++){int i=((H-1-y)*W+x)*4;im.setRGB(x,y,((b.get(i)&255)<<16)|((b.get(i+1)&255)<<8)|(b.get(i+2)&255));}return im;}
++
++    private static final class BitmapFont implements BroadcastScoreboard.Font {
++        private final int texture;
++        private final int[] widths=new int[256];
++        BitmapFont(File path) throws Exception {
++            BufferedImage im=ImageIO.read(path);ByteBuffer bytes=BufferUtils.createByteBuffer(im.getWidth()*im.getHeight()*4);
++            for(int y=0;y<im.getHeight();y++)for(int x=0;x<im.getWidth();x++){int p=im.getRGB(x,y);bytes.put((byte)(p>>16)).put((byte)(p>>8)).put((byte)p).put((byte)(p>>24));}
++            bytes.flip();texture=GL11.glGenTextures();GlStateManager.bindTexture(texture);
++            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_NEAREST);
++            GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA,im.getWidth(),im.getHeight(),0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,bytes);
++            for(int ch=0;ch<256;ch++){int last=7;while(last>=0){boolean ink=false;for(int y=0;y<8;y++)if((im.getRGB((ch%16)*8+last,(ch/16)*8+y)>>>24)>16){ink=true;break;}if(ink)break;last--;}widths[ch]=ch==32?4:last+2;}
++        }
++        public int width(String value){int result=0;for(char c:value.toCharArray())result+=widths[c];return result;}
++        public void draw(String value,int x,int y,int color) {
++            GlStateManager.pushMatrix();GlStateManager.translate(x,y,0);GlStateManager.enableTexture2D();GlStateManager.enableBlend();
++            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);GlStateManager.bindTexture(texture);
++            GlStateManager.color(((color>>16)&255)/255F,((color>>8)&255)/255F,(color&255)/255F,1);
++            int at=0;for(char ch:value.toCharArray()){float u=(ch%16)/16F,v=(ch/16)/16F;GL11.glBegin(GL11.GL_QUADS);GL11.glTexCoord2f(u,v);GL11.glVertex2f(at,0);GL11.glTexCoord2f(u,v+1/16F);GL11.glVertex2f(at,8);GL11.glTexCoord2f(u+1/16F,v+1/16F);GL11.glVertex2f(at+8,8);GL11.glTexCoord2f(u+1/16F,v);GL11.glVertex2f(at+8,0);GL11.glEnd();at+=widths[ch];}
++            GlStateManager.popMatrix();GlStateManager.color(1,1,1,1);
++        }
++    }
++}
+--- /dev/null
++++ b/src/test/java/net/sports/client/gui/ScoreboardStyleTest.java
+@@ -0,0 +1,31 @@
++package net.sports.client.gui;
++
++import org.junit.Test;
++import static org.junit.Assert.*;
++
++public class ScoreboardStyleTest {
++    @Test public void referenceMatchUsesBocaBandAndRiverDiagonal() {
++        ScoreboardStyle a=ScoreboardStyle.of("boca","Boca Juniors",0,0),b=ScoreboardStyle.of("river","River Plate",0,0);
++        assertEquals("BOC",a.abbreviation);assertEquals(ScoreboardStyle.Pattern.HORIZONTAL,a.pattern);
++        assertEquals("RIV",b.abbreviation);assertEquals(ScoreboardStyle.Pattern.DIAGONAL,b.pattern);
++        assertEquals(0xFFFFFF,a.text);assertEquals(0x111111,b.text);
++    }
++    @Test public void allOtherClubsHaveTheirOwnAbbreviationAndKitPattern() {
++        assertEquals("BAR",ScoreboardStyle.of("barcelona","",0,0).abbreviation);
++        assertEquals("RMA",ScoreboardStyle.of("realmadrid","",0,0).abbreviation);
++        assertEquals("EST",ScoreboardStyle.of("estudiantes","",0,0).abbreviation);
++        assertEquals(ScoreboardStyle.Pattern.VERTICAL,ScoreboardStyle.of("estudiantes","",0,0).pattern);
++        assertEquals(ScoreboardStyle.Pattern.GOLD_TRIM,ScoreboardStyle.of("realmadrid","",0,0).pattern);
++    }
++    @Test public void selectedClubStyleSurvivesAChangedDisplayName() {
++        ScoreboardStyle style=ScoreboardStyle.of("river","Mi equipo",123,456);
++        assertEquals("RIV",style.abbreviation);assertTrue(style.matches("river","Mi equipo",123,456));
++        assertFalse(style.matches("boca","Mi equipo",123,456));assertFalse(style.matches("river","Mi equipo",123,789));
++        assertEquals("BOC",ScoreboardStyle.of("","Boca Juniors",0,0).abbreviation);
++    }
++    @Test public void customTeamsUseTheirColorsAndSafeShortNames() {
++        ScoreboardStyle style=ScoreboardStyle.of("custom","§cÁguilas",0xFFFF3300,0xFF112244);
++        assertEquals("AGU",style.abbreviation);assertEquals(0x112244,style.base);assertEquals(0xFF3300,style.accent);
++        assertEquals(ScoreboardStyle.Pattern.PLAIN,style.pattern);assertEquals("---",ScoreboardStyle.of(null,null,0,0).abbreviation);
++    }
++}
